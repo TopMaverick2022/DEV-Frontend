@@ -20,8 +20,6 @@ export function LandingPage() {
             <span className="text-xl font-bold">DeveloperEv</span>
           </div>
           <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-sm font-medium hover:text-primary transition-colors">Features</a>
-            <a href="#pricing" className="text-sm font-medium hover:text-primary transition-colors">Pricing</a>
             <a href="/login" className="text-sm font-medium hover:text-primary transition-colors">Login</a>
             <button
               onClick={() => navigate('/login')}
@@ -56,48 +54,11 @@ export function LandingPage() {
                 className="w-full md:w-auto bg-primary text-primary-foreground px-8 py-3 rounded-full text-lg font-medium hover:opacity-90 transition-opacity">
                 Start for Free
               </button>
-              <button
-                onClick={() => window.open('https://github.com/TopMaverick2022/DEV-Backend', '_blank')}
-                className="w-full md:w-auto glass px-8 py-3 rounded-full text-lg font-medium hover:bg-white/10 transition-colors">
-                View Documentation
-              </button>
             </div>
           </motion.div>
 
-          {/* Feature Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24">
-            <FeatureCard 
-              icon={<Sparkles className="text-primary" />}
-              title="AI Project Planner"
-              description="Transform ideas into actionable roadmaps with our intelligent planning assistant."
-            />
-            <FeatureCard 
-              icon={<Code className="text-blue-500" />}
-              title="Smart Code Review"
-              description="Get deep insights into your codebase with automated, context-aware reviews."
-            />
-            <FeatureCard 
-              icon={<Shield className="text-green-500" />}
-              title="Security Analysis"
-              description="Proactively identify and fix vulnerabilities before they reach production."
-            />
-          </div>
         </div>
       </section>
     </div>
-  )
-}
-
-function FeatureCard({ icon, title, description }: { icon: React.ReactNode, title: string, description: string }) {
-  return (
-    <GlassCard className="text-left group cursor-pointer border-white/5">
-      <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
-        {icon}
-      </div>
-      <h3 className="text-xl font-bold mb-3">{title}</h3>
-      <p className="text-muted-foreground leading-relaxed">
-        {description}
-      </p>
-    </GlassCard>
   )
 }

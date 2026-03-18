@@ -28,6 +28,11 @@ export const authService = {
     return response.data;
   },
 
+  async resendVerification(email: string): Promise<string> {
+    const response = await apiClient.post<string>(`/auth/resend-verification?email=${email}`);
+    return response.data;
+  },
+
   async refreshToken(request: RefreshTokenRequest): Promise<AuthResponse> {
     const response = await apiClient.post<AuthResponse>("/auth/refresh-token", request);
     const { accessToken } = response.data;
