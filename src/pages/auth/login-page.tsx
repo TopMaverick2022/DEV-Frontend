@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
-import { Activity, ArrowRight, Github, User, Lock, Loader2 } from 'lucide-react'
+import { ArrowRight, Github, User, Lock, Loader2 } from 'lucide-react'
+import { DevLogo } from '@/components/shared/dev-logo'
 import { Link, useNavigate } from 'react-router-dom'
 import { authService } from '@/features/auth/auth-service'
 
@@ -57,9 +58,8 @@ export function LoginPage() {
         transition={{ duration: 0.4 }}
         className="w-full max-w-md"
       >
-        <div className="flex items-center justify-center gap-2 mb-8">
-          <Activity className="text-primary w-8 h-8" />
-          <span className="text-3xl font-bold text-foreground">DeveloperEv</span>
+        <div className="flex items-center justify-center mb-8">
+          <DevLogo size="lg" />
         </div>
 
         <GlassCard className="w-full">
