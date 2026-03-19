@@ -6,10 +6,13 @@ import { useTheme } from '@/components/theme-provider'
 import { FeatureScrollReveal } from '@/components/shared/feature-scroll-reveal'
 import { MagneticButton } from '@/components/shared/magnetic-button'
 import { AnimatedBackground } from '@/components/shared/animated-background'
+import { useAuth } from '@/features/auth/auth-context'
+import { UserNav } from '@/components/layout/user-nav'
 
 export function LandingPage() {
   const navigate = useNavigate()
   const { theme, setTheme } = useTheme()
+  const { isAuthenticated } = useAuth()
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/20 overflow-x-hidden">
@@ -26,16 +29,23 @@ export function LandingPage() {
             >
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
-            <button
-              onClick={() => navigate('/login')}
-              className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Sign In
-            </button>
-            <button
-              onClick={() => navigate('/register')}
-              className="bg-primary/90 text-primary-foreground px-5 py-2 rounded-full text-sm font-semibold hover:bg-primary hover:shadow-[0_0_20px_rgba(124,58,237,0.5)] transition-all duration-300 flex items-center gap-2">
-              Sign Up <ArrowRight className="w-4 h-4" />
-            </button>
+            
+            {isAuthenticated ? (
+              <UserNav />
+            ) : (
+              <>
+                <button
+                  onClick={() => navigate('/login')}
+                  className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                  Sign In
+                </button>
+                <button
+                  onClick={() => navigate('/register')}
+                  className="bg-primary/90 text-primary-foreground px-5 py-2 rounded-full text-sm font-semibold hover:bg-primary hover:shadow-[0_0_20px_rgba(124,58,237,0.5)] transition-all duration-300 flex items-center gap-2">
+                  Sign Up <ArrowRight className="w-4 h-4" />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -68,18 +78,18 @@ export function LandingPage() {
             
             <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
               <MagneticButton
-                onClick={() => navigate('/register')}
+                onClick={() => navigate(isAuthenticated ? '/dashboard' : '/register')}
                 className="w-full sm:w-auto relative group overflow-hidden bg-primary text-primary-foreground px-8 py-3 rounded-full text-base font-bold transition-all duration-300 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] flex items-center justify-center gap-2">
                 <span className="relative z-10 flex items-center gap-2">
                   <Terminal className="w-4 h-4" /> Start Executing
                 </span>
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out" />
               </MagneticButton>
-              <MagneticButton
+              {/* <MagneticButton
                 onClick={() => navigate('/login')}
                 className="w-full sm:w-auto border border-border bg-card/50 backdrop-blur-md hover:bg-muted/80 text-foreground px-8 py-3 rounded-full text-base font-medium transition-all duration-300 shadow-sm">
                 View Documentation
-              </MagneticButton>
+              </MagneticButton> */}
             </div>
           </motion.div>
         </div>

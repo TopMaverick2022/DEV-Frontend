@@ -5,6 +5,7 @@ import { ArrowRight, Github, User, Lock, Loader2 } from 'lucide-react'
 import { DevLogo } from '@/components/shared/dev-logo'
 import { Link, useNavigate } from 'react-router-dom'
 import { authService } from '@/features/auth/auth-service'
+import { useAuth } from '@/features/auth/auth-context'
 
 export function LoginPage() {
   const [username, setUsername] = useState('')
@@ -13,6 +14,7 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null)
   const [formErrors, setFormErrors] = useState({ username: '', password: '' });
   const navigate = useNavigate()
+  const { login } = useAuth()
 
   const validate = () => {
     const errors = { username: '', password: '' };
@@ -31,8 +33,13 @@ export function LoginPage() {
     setError(null)
 
     try {
-      await authService.login({ username, password })
-      navigate('/dashboard')
+      const response = await authService.login({ username, password })
+      login({ 
+        username, 
+        accessToken: response.accessToken, 
+        refreshToken: response.refreshToken 
+      })
+      navigate('/')
     } catch (err: any) {
       setError(err.message || 'Login failed. Please check your credentials.')
     } finally {

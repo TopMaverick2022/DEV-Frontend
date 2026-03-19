@@ -11,6 +11,7 @@ import { ArchitectureGeneratorPage } from '@/pages/tools/architecture-page'
 import { CodeReviewerPage } from '@/pages/tools/code-reviewer-page'
 import { AppLayout } from '@/components/layout/app-layout'
 import { SmoothScrollProvider } from './components/shared/smooth-scroll-provider'
+import { AuthProvider } from '@/features/auth/auth-context'
 
 const queryClient = new QueryClient()
 
@@ -18,13 +19,14 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark" storageKey="developer-ev-theme">
-        <SmoothScrollProvider>
-          <BrowserRouter
-            future={{
-              v7_startTransition: true,
-              v7_relativeSplatPath: true,
-            }}
-          >
+        <AuthProvider>
+          <SmoothScrollProvider>
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true,
+              }}
+            >
             <Routes>
               <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginPage />} />
@@ -39,7 +41,8 @@ function App() {
             </Routes>
           </BrowserRouter>
         </SmoothScrollProvider>
-      </ThemeProvider>
+      </AuthProvider>
+    </ThemeProvider>
     </QueryClientProvider>
   )
 }
