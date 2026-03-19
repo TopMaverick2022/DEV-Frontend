@@ -4,6 +4,7 @@ import { GlassCard } from '@/components/shared/glass-components'
 import { Activity, ArrowRight, Github, User, Lock, Mail, Loader2, CheckCircle2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { authService } from '@/features/auth/auth-service'
+import PasswordChecklist from '@/components/shared/password-checklist'
 
 export function RegisterPage() {
   const [username, setUsername] = useState('')
@@ -14,10 +15,23 @@ export function RegisterPage() {
   const [verifying, setVerifying] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [formErrors, setFormErrors] = useState({ username: '', email: '', password: '' });
   const navigate = useNavigate()
+
+  const validate = () => {
+    const errors = { username: '', email: '', password: '' };
+    if (!username) errors.username = 'Username is required.';
+    if (!email) errors.email = 'Email is required.';
+    if (!password) errors.password = 'Password is required.';
+    setFormErrors(errors);
+    return Object.values(errors).every(x => x === '');
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!validate()) {
+      return;
+    }
     setLoading(true)
     setError(null)
 
@@ -25,7 +39,11 @@ export function RegisterPage() {
       await authService.register({ username, email, password })
       setSuccess(true)
     } catch (err: any) {
-      setError(err.message || 'Registration failed. Please try again.')
+      if (err.message && err.message.includes('Password must')) {
+        setError('Please ensure your password meets all criteria below.');
+      } else {
+        setError(err.message || 'Registration failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -166,15 +184,15 @@ export function RegisterPage() {
               <div className="relative">
                 <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
-                  className="flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                  className={`flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground ${formErrors.username ? 'border-destructive' : ''}`}
                   id="username"
                   placeholder="Choose a username"
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
+                  onChange={(e) => { setUsername(e.target.value); setFormErrors({...formErrors, username: ''}) }}
                 />
               </div>
+              {formErrors.username && <p className="text-sm text-destructive mt-1">{formErrors.username}</p>}
             </div>
 
             <div className="space-y-2">
@@ -184,15 +202,15 @@ export function RegisterPage() {
               <div className="relative">
                 <Mail className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
-                  className="flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                  className={`flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground ${formErrors.email ? 'border-destructive' : ''}`}
                   id="email"
                   placeholder="name@example.com"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
+                  onChange={(e) => { setEmail(e.target.value); setFormErrors({...formErrors, email: ''}) }}
                 />
               </div>
+              {formErrors.email && <p className="text-sm text-destructive mt-1">{formErrors.email}</p>}
             </div>
             
             <div className="space-y-2">
@@ -202,18 +220,16 @@ export function RegisterPage() {
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
-                  className="flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                  className={`flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground ${formErrors.password ? 'border-destructive' : ''}`}
                   id="password"
                   type="password"
-                  placeholder="Min 8 characters"
+                  placeholder="Choose a strong password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
+                  onChange={(e) => { setPassword(e.target.value); setFormErrors({...formErrors, password: ''}) }}
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground mt-1">
-                Must include uppercase, lowercase, number and special character.
-              </p>
+              {formErrors.password && <p className="text-sm text-destructive mt-1">{formErrors.password}</p>}
+              <PasswordChecklist password={password} />
             </div>
 
             <button 

@@ -10,10 +10,22 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [formErrors, setFormErrors] = useState({ username: '', password: '' });
   const navigate = useNavigate()
+
+  const validate = () => {
+    const errors = { username: '', password: '' };
+    if (!username) errors.username = 'Username is required.';
+    if (!password) errors.password = 'Password is required.';
+    setFormErrors(errors);
+    return Object.values(errors).every(x => x === '');
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if(!validate()) {
+      return;
+    }
     setLoading(true)
     setError(null)
 
@@ -68,15 +80,15 @@ export function LoginPage() {
               <div className="relative">
                 <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
-                  className="flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                  className={`flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground ${formErrors.username ? 'border-destructive' : ''}`}
                   id="username"
                   placeholder="Your username"
                   type="text"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
+                  onChange={(e) => { setUsername(e.target.value); setFormErrors({...formErrors, username: ''}) }}
                 />
               </div>
+              {formErrors.username && <p className="text-sm text-destructive mt-1">{formErrors.username}</p>}
             </div>
             
             <div className="space-y-2">
@@ -89,14 +101,14 @@ export function LoginPage() {
               <div className="relative">
                 <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                 <input
-                  className="flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground"
+                  className={`flex h-10 w-full rounded-md border border-input bg-background/50 px-9 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-foreground ${formErrors.password ? 'border-destructive' : ''}`}
                   id="password"
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
+                  onChange={(e) => { setPassword(e.target.value); setFormErrors({...formErrors, password: ''}) }}
                 />
               </div>
+              {formErrors.password && <p className="text-sm text-destructive mt-1">{formErrors.password}</p>}
             </div>
 
             <button 

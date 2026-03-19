@@ -1,10 +1,12 @@
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { GlassCard, GradientText } from '@/components/shared/glass-components'
-import { ArrowRight, Code, Shield, Zap, Sparkles, Activity } from 'lucide-react'
+import { GradientText } from '@/components/shared/glass-components'
+import { ArrowRight, Activity, Moon, Sun } from 'lucide-react'
+import { useTheme } from '@/components/theme-provider'
 
 export function LandingPage() {
   const navigate = useNavigate()
+  const { theme, setTheme } = useTheme()
 
   return (
     <div className="min-h-screen bg-background relative overflow-hidden">
@@ -20,6 +22,12 @@ export function LandingPage() {
             <span className="text-xl font-bold">DeveloperEv</span>
           </div>
           <div className="hidden md:flex items-center gap-8">
+            <button 
+              onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+              className="p-2 hover:bg-accent rounded-full text-muted-foreground transition-colors"
+            >
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
             <a href="/login" className="text-sm font-medium hover:text-primary transition-colors">Login</a>
             <button
               onClick={() => navigate('/login')}
@@ -48,13 +56,13 @@ export function LandingPage() {
             <p className="text-muted-foreground text-lg md:text-xl max-w-2xl mx-auto mb-10">
               The ultimate SaaS platform for modern developers. Analyze, review, and generate production-ready code with the power of advanced AI.
             </p>
-            <div className="flex flex-col md:flex-row items-center justify-center gap-4">
+            {/* <div className="flex flex-col md:flex-row items-center justify-center gap-4">
               <button
                 onClick={() => navigate('/register')}
                 className="w-full md:w-auto bg-primary text-primary-foreground px-8 py-3 rounded-full text-lg font-medium hover:opacity-90 transition-opacity">
                 Start for Free
               </button>
-            </div>
+            </div> */}
           </motion.div>
 
         </div>
