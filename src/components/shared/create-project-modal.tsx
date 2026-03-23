@@ -3,7 +3,22 @@ import { motion } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
 import { Plus, Github, Loader2, X } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { projectService } from '@/features/projects/project-service'
+import apiClient from '@/lib/api-client'
+
+interface CreateProjectPayload {
+  name: string
+  description: string
+  githubRepoUrl: string
+}
+
+async function createProjectApi(payload: CreateProjectPayload) {
+  const response = await apiClient.post('/projects', {
+    name: payload.name,
+    description: payload.description,
+    githubRepoUrl: payload.githubRepoUrl,
+  })
+  return response.data
+}
 
 export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   const queryClient = useQueryClient()
@@ -12,7 +27,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   const [githubRepoUrl, setGithubRepoUrl] = useState('')
 
   const createMutation = useMutation({
-    mutationFn: projectService.createProject,
+    mutationFn: createProjectApi,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       onClose()
@@ -22,7 +37,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
-    createMutation.mutate({ name, description, githubRepoUrl })
+    createMutation.mutate({ name: name.trim(), description, githubRepoUrl })
   }
 
   return (
@@ -34,7 +49,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
         className="w-full max-w-md"
       >
         <GlassCard className="relative">
-          <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-white/10 rounded-full transition-colors">
+          <button onClick={onClose} disabled={createMutation.isPending} className="absolute top-4 right-4 p-1 hover:bg-white/10 rounded-full transition-colors disabled:opacity-50">
             <X className="w-4 h-4" />
           </button>
           <h2 className="text-xl font-bold mb-1 text-foreground">Create New Project</h2>
@@ -42,7 +57,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
 
           {createMutation.isError && (
             <div className="mb-4 p-3 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-sm">
-              Failed to create project. Please try again.
+              {(createMutation.error as Error)?.message || 'Failed to create project. Make sure you are logged in.'}
             </div>
           )}
 
@@ -54,6 +69,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                 placeholder="My Awesome Project"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                autoFocus
                 className="w-full bg-muted dark:bg-background/50 border border-input rounded-lg px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
                 required
               />
@@ -81,7 +97,12 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
               />
             </div>
             <div className="flex gap-3 pt-2">
-              <button type="button" onClick={onClose} className="flex-1 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={createMutation.isPending}
+                className="flex-1 py-2 border border-border rounded-lg text-sm font-medium hover:bg-muted transition-colors disabled:opacity-50"
+              >
                 Cancel
               </button>
               <button
@@ -90,7 +111,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                 className="flex-1 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
                 {createMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                Create Project
+                {createMutation.isPending ? 'Creating…' : 'Create Project'}
               </button>
             </div>
           </form>

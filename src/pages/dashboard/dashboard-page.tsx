@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
 import { CreateProjectModal } from '@/components/shared/create-project-modal'
@@ -15,11 +15,15 @@ import {
   Clock,
   Activity,
   Plus,
-  Loader2
+  Loader2,
+  Upload,
+  CheckCircle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import { projectService } from '@/features/projects/project-service'
+import apiClient from '@/lib/api-client'
+import { useNavigate } from 'react-router-dom'
 
 const activityData = [
   { name: 'Mon', commits: 40, bugs: 24, coverage: 80 },
@@ -32,7 +36,27 @@ const activityData = [
 ]
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const [showModal, setShowModal] = useState(false)
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done'>('idle')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadState('uploading')
+    try {
+      const formData = new FormData()
+      formData.append('project', file)
+      await apiClient.post('/ai/code-review', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setUploadState('done')
+      setTimeout(() => setUploadState('idle'), 3000)
+    } catch {
+      setUploadState('idle')
+    } finally {
+      e.target.value = ''
+    }
+  }
 
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects'],
@@ -68,16 +92,30 @@ export function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <input ref={fileInputRef} type="file" accept=".zip" onChange={handleZipUpload} className="hidden" />
             {latestProject?.githubRepoUrl && (
-              <a
-                href={latestProject.githubRepoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="glass px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10"
-              >
+              <a href={latestProject.githubRepoUrl} target="_blank" rel="noopener noreferrer"
+                className="glass px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10">
                 <Github className="w-4 h-4" /> Github Repo
               </a>
             )}
+            <button
+              onClick={() => navigate('/projects')}
+              className="glass px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors border border-border/50"
+            >
+              All Projects{projects && projects.length > 0 ? ` (${projects.length})` : ''}
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadState === 'uploading'}
+              className="glass px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50"
+              title="Upload a project zip for AI code review"
+            >
+              {uploadState === 'uploading' ? <Loader2 className="w-4 h-4 animate-spin" />
+                : uploadState === 'done' ? <CheckCircle className="w-4 h-4 text-green-500" />
+                : <Upload className="w-4 h-4" />}
+              {uploadState === 'uploading' ? 'Uploading…' : uploadState === 'done' ? 'Uploaded!' : 'Upload ZIP'}
+            </button>
             <button
               onClick={() => setShowModal(true)}
               className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-primary/25 hover:opacity-90"
