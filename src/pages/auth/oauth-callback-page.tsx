@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
+import { tokenStore } from '@/lib/api-client'
 
 export function OAuthCallbackPage() {
   const [searchParams] = useSearchParams()
@@ -9,9 +10,7 @@ export function OAuthCallbackPage() {
   useEffect(() => {
     const token = searchParams.get('token')
     if (token) {
-      localStorage.setItem('accessToken', token)
-      // Since OAuth2 doesn't always provide a refresh token in this simple setup
-      // we just set the access token. If refresh token is needed, backend should provide it too.
+      tokenStore.set(token)
       navigate('/dashboard')
     } else {
       navigate('/login?error=OAuth2 login failed')
