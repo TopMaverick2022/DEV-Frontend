@@ -19,7 +19,6 @@ import { DevLogo } from '@/components/shared/dev-logo'
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { icon: Layers, label: 'Projects', path: '/projects' },
   { type: 'header', label: 'AI Assistants' },
   { icon: Wand2, label: 'Project Planner', path: '/planner' },
   { icon: Layers, label: 'Architecture Gen', path: '/architecture' },
