@@ -1,7 +1,7 @@
 import React from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Calendar, ListTodo, Github, Code2, Bug, Layers, Activity, FileText, ShieldAlert, Sparkles } from "lucide-react";
+import { Calendar, ListTodo, Github, Code2, Bug, Layers, Activity, FileText, ShieldAlert } from "lucide-react";
 
 // Exact 9 Core Developer Execution System tools as requested
 const features = [
@@ -12,8 +12,8 @@ const features = [
   { id: "performance-analyzer", title: "Performance Analyzer", description: "Optimize performance automatically.", image: "/images/performance_analyzer.png", icon: Activity }, 
   { id: "feature-tracker", title: "Feature Tracker", description: "Track your entire development lifecycle.", image: "/images/feature_planner_simple_1773916096734.png", icon: ListTodo },
   { id: "github-integration", title: "GitHub Integration", description: "Connect your GitHub repo and let AI understand your project.", image: "/images/github_inter_simple_1773916110111.png", icon: Github },
-  { id: "edge-case-detector", title: "Edge Case Detector", description: "Detect hidden bugs before production.", image: "", icon: ShieldAlert },
-  { id: "ai-code-refactoring", title: "AI Code Refactoring", description: "Refactor code intelligently.", image: "", icon: Code2 }
+  { id: "edge-case-detector", title: "Edge Case Detector", description: "Detect hidden bugs before production.", image: "/images/edge_case_simple_1774240688521.png", icon: ShieldAlert },
+  { id: "ai-code-refactoring", title: "AI Code Refactoring", description: "Refactor code intelligently.", image: "/images/ai_refactor_simple_1774240708714.png", icon: Code2 }
 ];
 
 // Reusable 3D Tilt Card wrapper
@@ -67,73 +67,73 @@ const TiltCard = ({ children, className }: { children: React.ReactNode; classNam
 
 export const FeatureScrollReveal = () => {
   return (
-    <div className="w-full flex flex-col gap-32 py-16 overflow-hidden relative">
+    <div className="w-full flex flex-col gap-16 md:gap-24 py-8 overflow-hidden relative">
       {features.map((feature, idx) => {
         const isEven = idx % 2 === 0;
         const Icon = feature.icon;
 
         return (
-          <div key={feature.id} className="container mx-auto px-6 max-w-6xl">
+          <div key={feature.id} className="container mx-auto px-6 max-w-5xl">
             <div className={cn(
-              "flex flex-col md:flex-row items-center gap-12 lg:gap-20",
+              "flex flex-col md:flex-row items-center gap-8 lg:gap-12",
               isEven ? "md:flex-row" : "md:flex-row-reverse"
             )}>
               
-              {/* Image Side (Slide in from edge) */}
+              {/* Image Side (Slide in from edge) - Reduced width */}
               <motion.div 
-                initial={{ opacity: 0, x: isEven ? -80 : 80 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                className="w-full md:w-1/2"
+                initial={{ opacity: 0, x: isEven ? -60 : 60, scale: 0.95 }}
+                whileInView={{ opacity: 1, x: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+                className="w-full md:w-[42%]"
                 style={{ perspective: "1000px" }}
               >
-                <TiltCard className="relative w-full aspect-[4/3] rounded-3xl border border-border bg-card shadow-xl flex items-center justify-center overflow-hidden group hover:shadow-[0_0_40px_rgba(124,58,237,0.2)] transition-shadow duration-500">
-                  <div className="absolute inset-0 rounded-3xl overflow-hidden -z-10">
+                <TiltCard className="relative w-full aspect-[16/10] rounded-2xl border border-border bg-card shadow-lg flex items-center justify-center overflow-hidden group hover:shadow-[0_0_30px_rgba(124,58,237,0.15)] transition-shadow duration-500">
+                  <div className="absolute inset-0 rounded-2xl overflow-hidden -z-10">
                     {feature.image ? (
                       <img
                         src={feature.image}
                         alt={feature.title}
-                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.1]"
+                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.05]"
                       />
                     ) : (
-                      <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-primary/10 via-background to-background flex items-center justify-center">
-                        <Icon className="w-40 h-40 text-primary opacity-20 group-hover:opacity-40 transition-opacity duration-700 group-hover:scale-110" />
+                      <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-primary/5 via-background to-background flex items-center justify-center">
+                        <Icon className="w-24 h-24 text-primary opacity-10 group-hover:opacity-25 transition-opacity duration-700 group-hover:scale-110" />
                       </div>
                     )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none" />
                   </div>
                   
-                  {/* Floating abstract tech element on top of cards for depth */}
+                  {/* Floating abstract tech element on top of cards for depth - Made smaller */}
                   <motion.div 
-                    initial={{ opacity: 0, y: 20 }}
+                    initial={{ opacity: 0, y: 10 }}
                     whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                    className="absolute bottom-6 left-6 right-6 p-4 rounded-xl bg-black/40 backdrop-blur-md border border-white/10 hidden group-hover:flex items-center gap-3 transform translate-z-[20px]"
+                    transition={{ delay: 0.3 }}
+                    className="absolute bottom-4 left-4 right-4 p-2 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 hidden group-hover:flex items-center gap-2 transform translate-z-[15px]"
                   >
-                     <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                     <code className="text-white/80 text-sm font-mono">System.{feature.id}.initialize()</code>
+                     <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                     <code className="text-white/80 text-[10px] font-mono whitespace-nowrap overflow-hidden text-ellipsis">System.{feature.id}.init()</code>
                   </motion.div>
                 </TiltCard>
               </motion.div>
 
-              {/* Text Side */}
+              {/* Text Side - Reduced font sizes and spacing */}
               <motion.div
-                initial={{ opacity: 0, x: isEven ? 80 : -80 }}
+                initial={{ opacity: 0, x: isEven ? 60 : -60 }}
                 whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.8, ease: "easeOut", delay: 0.2 }}
-                className="w-full md:w-1/2 flex flex-col items-start gap-6"
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
+                className="w-full md:w-[58%] flex flex-col items-start gap-4"
               >
-                <div className="p-4 rounded-2xl bg-primary/10 text-primary border border-primary/20 shadow-sm flex items-center gap-3">
-                  <Icon className="w-6 h-6" />
+                <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shadow-sm flex items-center gap-2">
+                  <Icon className="w-5 h-5" />
                 </div>
                 
-                <h3 className="text-3xl md:text-5xl font-extrabold tracking-tight text-foreground leading-[1.1]">
+                <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-foreground leading-tight">
                   {feature.title}
                 </h3>
                 
-                <p className="text-lg md:text-xl text-muted-foreground leading-relaxed">
+                <p className="text-base md:text-lg text-muted-foreground leading-relaxed max-w-lg">
                   {feature.description}
                 </p>
                 
