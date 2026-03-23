@@ -83,7 +83,7 @@ export const FeatureScrollReveal = () => {
               <motion.div 
                 initial={{ opacity: 0, x: isEven ? -60 : 60, scale: 0.95 }}
                 whileInView={{ opacity: 1, x: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-50px" }}
+                viewport={{ once: false, margin: "-50px" }}
                 transition={{ duration: 0.6, ease: "easeOut" }}
                 className="w-full md:w-[42%]"
                 style={{ perspective: "1000px" }}
@@ -121,7 +121,7 @@ export const FeatureScrollReveal = () => {
               <motion.div
                 initial={{ opacity: 0, x: isEven ? 60 : -60 }}
                 whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: "-50px" }}
+                viewport={{ once: false, margin: "-50px" }}
                 transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
                 className="w-full md:w-[58%] flex flex-col items-start gap-4"
               >

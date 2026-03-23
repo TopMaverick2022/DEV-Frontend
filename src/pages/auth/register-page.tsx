@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
-import { ArrowRight, Github, User, Lock, Mail, Loader2, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, Github, User, Lock, Mail, Loader2, CheckCircle2, Home } from 'lucide-react'
 import { DevLogo } from '@/components/shared/dev-logo'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { authService } from '@/features/auth/auth-service'
 import PasswordChecklist from '@/components/shared/password-checklist'
 
@@ -89,6 +89,15 @@ export function RegisterPage() {
   if (success) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6 relative overflow-hidden">
+        <div className="absolute top-8 left-8 z-20">
+          <Link 
+            to="/" 
+            className="flex items-center gap-2 px-4 py-2 rounded-full glass hover:bg-white/10 transition-all group border border-border/40"
+          >
+            <Home className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-medium text-foreground">Back to Home</span>
+          </Link>
+        </div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/10 blur-[100px] rounded-full -z-10" />
         <GlassCard className="w-full max-w-md">
           <div className="text-center mb-8">
@@ -154,6 +163,15 @@ export function RegisterPage() {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6 relative overflow-hidden">
+      <div className="absolute top-8 left-8 z-20">
+        <Link 
+          to="/" 
+          className="flex items-center gap-2 px-4 py-2 rounded-full glass hover:bg-white/10 transition-all group border border-border/40"
+        >
+          <Home className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
+          <span className="text-sm font-medium text-foreground">Back to Home</span>
+        </Link>
+      </div>
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-primary/10 blur-[100px] rounded-full -z-10" />
       
       <motion.div

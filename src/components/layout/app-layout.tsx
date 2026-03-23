@@ -1,7 +1,8 @@
 import { Sidebar } from './sidebar'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Moon, Sun, Bell, User } from 'lucide-react'
+import { Moon, Sun, Bell } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
+import { UserNav } from './user-nav'
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme()
@@ -27,12 +28,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <div className="h-8 w-[1px] bg-border/50 mx-2" />
-            <button className="flex items-center gap-2 pl-2 pr-1 py-1 hover:bg-accent rounded-full transition-colors border border-border/50">
-              <span className="text-sm font-medium px-2">Nidhish</span>
-              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
-                <User className="w-4 h-4 text-primary-foreground" />
-              </div>
-            </button>
+            <UserNav />
           </div>
         </header>
 

@@ -51,14 +51,14 @@ export function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section className="pt-40 pb-20 px-6 relative z-10">
+      <section className="pt-28 pb-20 px-6 relative z-10">
 
         <div className="container mx-auto relative z-10">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="flex flex-col items-center text-center pt-32 pb-16"
+            className="flex flex-col items-center text-center pt-20 pb-16"
           >
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-sm font-medium text-primary mb-8 tracking-wide">
               <Sparkles className="w-4 h-4" />
