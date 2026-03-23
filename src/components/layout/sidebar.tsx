@@ -1,77 +1,115 @@
-import { useNavigate, Link, useLocation } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  Layers, 
-  Wand2, 
-  Code2, 
-  Search, 
-  Bug, 
-  ShieldCheck, 
-  Zap, 
-  FileText, 
-  Activity, 
+import { useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
+import {
+  LayoutDashboard,
+  Layers,
+  Wand2,
+  Code2,
+  Search,
+  Bug,
+  ShieldCheck,
+  Zap,
+  FileText,
+  Activity,
   Settings,
-  ChevronRight
+  ChevronDown,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { DevLogo } from '@/components/shared/dev-logo'
 
-const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard' },
-  { type: 'header', label: 'AI Assistants' },
-  { icon: Wand2, label: 'Project Planner', path: '/planner' },
-  { icon: Layers, label: 'Architecture Gen', path: '/architecture' },
-  { icon: Code2, label: 'Code Reviewer', path: '/reviewer' },
-  { icon: Search, label: 'Code Explainer', path: '/explainer' },
-  { icon: Bug, label: 'Debugger', path: '/debugger' },
-  { type: 'header', label: 'Analysis' },
-  { icon: ShieldCheck, label: 'Security', path: '/security' },
-  { icon: Zap, label: 'Performance', path: '/performance' },
-  { icon: FileText, label: 'Docs Gen', path: '/docs' },
-  { icon: Activity, label: 'Health Dashboard', path: '/health' },
+const groups = [
+  {
+    label: 'AI Assistants',
+    items: [
+      { icon: Wand2,  label: 'Project Planner',  path: '/planner' },
+      { icon: Layers, label: 'Architecture Gen',  path: '/architecture' },
+      { icon: Code2,  label: 'Code Reviewer',     path: '/reviewer' },
+      { icon: Search, label: 'Code Explainer',    path: '/explainer' },
+      { icon: Bug,    label: 'Debugger',           path: '/debugger' },
+    ],
+  },
+  {
+    label: 'Analysis',
+    items: [
+      { icon: ShieldCheck, label: 'Security',          path: '/security' },
+      { icon: Zap,         label: 'Performance',       path: '/performance' },
+      { icon: FileText,    label: 'Docs Gen',          path: '/docs' },
+      { icon: Activity,    label: 'Health Dashboard',  path: '/health' },
+    ],
+  },
 ]
 
 export function Sidebar() {
   const location = useLocation()
-  
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+
+  const toggle = (label: string) =>
+    setCollapsed(prev => ({ ...prev, [label]: !prev[label] }))
+
   return (
     <aside className="w-64 border-r bg-card/50 backdrop-blur-xl h-screen flex flex-col sticky top-0 overflow-y-auto">
       <div className="p-6 pb-2">
         <DevLogo size="md" className="mb-8" />
 
         <nav className="space-y-1">
-          {menuItems.map((item, index) => {
-            if (item.type === 'header') {
-              return (
-                <div key={index} className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider mt-4">
-                  {item.label}
-                </div>
-              )
-            }
+          {/* Dashboard — standalone, always visible */}
+          <NavItem
+            icon={LayoutDashboard}
+            label="Dashboard"
+            path="/dashboard"
+            isActive={location.pathname === '/dashboard'}
+          />
 
-            const Icon = item.icon!
-            const isActive = location.pathname === item.path
-            
+          {/* Collapsible groups */}
+          {groups.map(group => {
+            const isOpen = !collapsed[group.label]
+            const hasActive = group.items.some(i => i.path === location.pathname)
+
             return (
-              <motion.div
-                key={index}
-                whileHover={{ x: 4 }}
-              >
-                <Link
-                  to={item.path || '#'}
+              <div key={group.label} className="mt-3">
+                <button
+                  onClick={() => toggle(group.label)}
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group",
-                    isActive 
-                      ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20" 
-                      : "hover:bg-accent hover:text-accent-foreground text-muted-foreground"
+                    'w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-colors',
+                    hasActive
+                      ? 'text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                   )}
                 >
-                  <Icon className={cn("w-4 h-4", isActive ? "text-primary-foreground" : "group-hover:text-primary")} />
-                  <span>{item.label}</span>
-                  <ChevronRight className={cn("w-3 h-3 ml-auto opacity-0 group-hover:opacity-100 transition-opacity", isActive && "opacity-100")} />
-                </Link>
-              </motion.div>
+                  {group.label}
+                  <ChevronDown
+                    className={cn(
+                      'w-3.5 h-3.5 transition-transform duration-200',
+                      isOpen ? 'rotate-0' : '-rotate-90'
+                    )}
+                  />
+                </button>
+
+                <AnimatePresence initial={false}>
+                  {isOpen && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: 0.2, ease: 'easeInOut' }}
+                      className="overflow-hidden"
+                    >
+                      <div className="mt-1 space-y-1 pl-2 border-l border-border/50 ml-3">
+                        {group.items.map(item => (
+                          <NavItem
+                            key={item.path}
+                            icon={item.icon}
+                            label={item.label}
+                            path={item.path}
+                            isActive={location.pathname === item.path}
+                          />
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             )
           })}
         </nav>
@@ -84,5 +122,34 @@ export function Sidebar() {
         </button>
       </div>
     </aside>
+  )
+}
+
+function NavItem({
+  icon: Icon,
+  label,
+  path,
+  isActive,
+}: {
+  icon: React.ElementType
+  label: string
+  path: string
+  isActive: boolean
+}) {
+  return (
+    <motion.div whileHover={{ x: 4 }}>
+      <Link
+        to={path}
+        className={cn(
+          'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group',
+          isActive
+            ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20'
+            : 'hover:bg-accent hover:text-accent-foreground text-muted-foreground'
+        )}
+      >
+        <Icon className={cn('w-4 h-4 shrink-0', isActive ? 'text-primary-foreground' : 'group-hover:text-primary')} />
+        <span>{label}</span>
+      </Link>
+    </motion.div>
   )
 }

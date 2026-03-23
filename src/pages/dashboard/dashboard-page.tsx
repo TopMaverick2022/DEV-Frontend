@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react'
-import { AnimatePresence } from 'framer-motion'
+import { useState, useRef, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
 import { CreateProjectModal } from '@/components/shared/create-project-modal'
 import {
@@ -17,13 +17,19 @@ import {
   Plus,
   Loader2,
   Upload,
-  CheckCircle
+  CheckCircle,
+  ChevronDown,
+  FolderOpen
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
 import { projectService } from '@/features/projects/project-service'
 import apiClient from '@/lib/api-client'
 import { useNavigate } from 'react-router-dom'
+import { Project } from '@/types/project'
+import { GitHubPanel } from '@/components/shared/github-panel'
+import { RepositoryBrowser } from '@/components/shared/repository-browser'
+import { AlertCircle } from 'lucide-react'
 
 const activityData = [
   { name: 'Mon', commits: 40, bugs: 24, coverage: 80 },
@@ -35,10 +41,88 @@ const activityData = [
   { name: 'Sun', commits: 34, bugs: 43, coverage: 92 },
 ]
 
+// ── Project Switcher Dropdown ────────────────────────────────────────────────
+function ProjectSwitcher({
+  projects,
+  selected,
+  onSelect
+}: {
+  projects: Project[]
+  selected: Project | null
+  onSelect: (p: Project) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  // Close on outside click
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-2 glass border border-border/50 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-white/10 transition-all duration-200 min-w-[160px] max-w-[220px]"
+      >
+        <FolderOpen className="w-4 h-4 text-primary shrink-0" />
+        <span className="truncate flex-1 text-left">
+          {selected?.name ?? 'Select project'}
+        </span>
+        <ChevronDown className={cn('w-4 h-4 shrink-0 text-muted-foreground transition-transform duration-200', open && 'rotate-180')} />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.97 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 top-full mt-2 w-64 z-50 bg-card border border-border rounded-xl shadow-2xl shadow-black/30 overflow-hidden"
+          >
+            <div className="p-1.5 max-h-64 overflow-y-auto">
+              {projects.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => { onSelect(p); setOpen(false) }}
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors',
+                    selected?.id === p.id
+                      ? 'bg-primary/10 text-primary font-semibold'
+                      : 'hover:bg-accent text-foreground'
+                  )}
+                >
+                  <FolderOpen className="w-4 h-4 shrink-0 opacity-60" />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{p.name}</p>
+                    {p.description && (
+                      <p className="truncate text-xs text-muted-foreground">{p.description}</p>
+                    )}
+                  </div>
+                  {selected?.id === p.id && (
+                    <CheckCircle className="w-3.5 h-3.5 shrink-0 ml-auto text-primary" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+// ── Dashboard Page ────────────────────────────────────────────────────────────
 export function DashboardPage() {
   const navigate = useNavigate()
   const [showModal, setShowModal] = useState(false)
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done'>('idle')
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -63,6 +147,24 @@ export function DashboardPage() {
     queryFn: () => projectService.getMyProjects(),
   })
 
+  // Fetch dynamic AI health stats for the selected project
+  const { data: projectStats, isLoading: statsLoading } = useQuery({
+    queryKey: ['projectStats', selectedProject?.id],
+    queryFn: async () => {
+      if (!selectedProject?.id) return null
+      const { data } = await apiClient.get(`/api/projects/${selectedProject.id}/stats`)
+      return data
+    },
+    enabled: !!selectedProject?.id,
+  })
+
+  // Auto-select the first project when projects load, only once
+  useEffect(() => {
+    if (projects && projects.length > 0 && !selectedProject) {
+      setSelectedProject(projects[0])
+    }
+  }, [projects])
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -71,7 +173,7 @@ export function DashboardPage() {
     )
   }
 
-  const latestProject = projects?.[0]
+  const hasProjects = projects && projects.length > 0
 
   return (
     <>
@@ -80,42 +182,62 @@ export function DashboardPage() {
       </AnimatePresence>
 
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        {/* ── Header Row ── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Project Overview</h1>
-            <p className="text-muted-foreground">
-              {latestProject ? (
-                <>Detailed metrics and health status for <span className="text-primary font-medium">{latestProject.name}</span></>
+            <p className="text-muted-foreground mt-0.5">
+              {selectedProject ? (
+                <>Metrics and health status for <span className="text-primary font-medium">{selectedProject.name}</span></>
               ) : (
-                "No active projects. Create one to get started."
+                'No active projects. Create one to get started.'
               )}
             </p>
           </div>
-          <div className="flex items-center gap-3">
+
+          <div className="flex items-center gap-2 flex-wrap">
             <input ref={fileInputRef} type="file" accept=".zip" onChange={handleZipUpload} className="hidden" />
-            {latestProject?.githubRepoUrl && (
-              <a href={latestProject.githubRepoUrl} target="_blank" rel="noopener noreferrer"
-                className="glass px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10">
-                <Github className="w-4 h-4" /> Github Repo
+
+            {/* Project switcher — only when there are projects */}
+            {hasProjects && (
+              <ProjectSwitcher
+                projects={projects}
+                selected={selectedProject}
+                onSelect={setSelectedProject}
+              />
+            )}
+
+            {/* GitHub link for the selected project */}
+            {selectedProject?.githubRepoUrl && (
+              <a
+                href={selectedProject.githubRepoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 border border-border/50"
+              >
+                <Github className="w-4 h-4" /> Repo
               </a>
             )}
+
             <button
               onClick={() => navigate('/projects')}
-              className="glass px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors border border-border/50"
+              className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors border border-border/50"
             >
-              All Projects{projects && projects.length > 0 ? ` (${projects.length})` : ''}
+              All Projects{hasProjects ? ` (${projects.length})` : ''}
             </button>
+
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadState === 'uploading'}
-              className="glass px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50"
+              className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50 border border-border/50"
               title="Upload a project zip for AI code review"
             >
               {uploadState === 'uploading' ? <Loader2 className="w-4 h-4 animate-spin" />
                 : uploadState === 'done' ? <CheckCircle className="w-4 h-4 text-green-500" />
-                : <Upload className="w-4 h-4" />}
+                  : <Upload className="w-4 h-4" />}
               {uploadState === 'uploading' ? 'Uploading…' : uploadState === 'done' ? 'Uploaded!' : 'Upload ZIP'}
             </button>
+
             <button
               onClick={() => setShowModal(true)}
               className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-primary/25 hover:opacity-90"
@@ -125,62 +247,126 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {projects && projects.length > 0 ? (
-          <>
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              <StatCard title="Code Health" value="94%" trend="+2.5%" icon={<Activity className="text-green-500" />} color="bg-green-500/10" />
-              <StatCard title="Security Score" value="A+" trend="No issues" icon={<ShieldCheck className="text-blue-500" />} color="bg-blue-500/10" />
-              <StatCard title="Avg. Build Time" value="4.2m" trend="-12s" icon={<Clock className="text-amber-500" />} color="bg-amber-500/10" />
-              <StatCard title="Open PRs" value="12" trend="4 pending AI review" icon={<GitBranch className="text-purple-500" />} color="bg-purple-500/10" />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Main Activity Chart */}
-              <GlassCard className="lg:col-span-2">
-                <div className="flex items-center justify-between mb-8">
+        {/* ── Content ── */}
+        {hasProjects ? (
+          <motion.div
+            key={selectedProject?.id ?? 'none'}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className="space-y-8"
+          >
+            {/* Out of Sync Warning Banner */}
+            {projectStats?.syncStatus === 'OUT_OF_SYNC' && (
+              <GlassCard className="bg-amber-500/10 border-amber-500/20 py-3 px-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-500" />
                   <div>
-                    <h3 className="text-lg font-bold text-foreground">Commit Activity</h3>
-                    <p className="text-sm text-muted-foreground">Daily code changes across all branches</p>
+                    <h4 className="text-sm font-bold text-amber-500">Repository Out of Sync</h4>
+                    <p className="text-xs text-amber-400">New commits detected on GitHub that haven't been analyzed. Please Pull & Analyze.</p>
                   </div>
-                  <select className="bg-background/50 text-foreground border-none rounded-md text-xs px-2 py-1 outline-none">
-                    <option>Last 7 Days</option>
-                    <option>Last 30 Days</option>
-                  </select>
-                </div>
-                <div className="h-[300px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={activityData}>
-                      <defs>
-                        <linearGradient id="colorCommits" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                          <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} dy={10} />
-                      <YAxis axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} />
-                      <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} itemStyle={{ color: '#fff' }} />
-                      <Area type="monotone" dataKey="commits" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCommits)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
                 </div>
               </GlassCard>
+            )}
 
-              {/* AI Recommendations */}
-              <GlassCard>
-                <h3 className="text-lg font-bold mb-6 text-foreground">AI Insights</h3>
-                <div className="space-y-4">
-                  <InsightItem icon={<ShieldCheck className="text-green-500" />} title="Security Patch Ready" desc="Update lodash to v4.17.21 to fix CVE-2020-8203." />
-                  <InsightItem icon={<Zap className="text-amber-500" />} title="Optimization Gap" desc="Component 'Header.tsx' re-renders excessively. Suggested useMemo hook." />
-                  <InsightItem icon={<Code className="text-blue-500" />} title="Style Inconsistency" desc="5 files use mixed indentation. Suggested 'prettier --write'." />
-                </div>
-                <button className="w-full mt-8 py-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors text-sm font-medium text-foreground">
-                  View All Insights
-                </button>
-              </GlassCard>
+            {/* Stats Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <StatCard 
+                title="AI Health Score" 
+                value={`${projectStats?.healthScore ?? 0}%`} 
+                trend={`${projectStats?.totalFilesAnalyzed ?? 0} files scanned`} 
+                icon={<Activity className="text-green-500" />} 
+                color="bg-green-500/10" 
+              />
+              <StatCard 
+                title="Security Issues" 
+                value={projectStats?.totalSecurityIssues ?? 0} 
+                trend="AI Detected" 
+                icon={<ShieldCheck className="text-blue-500" />} 
+                color="bg-blue-500/10" 
+              />
+              <StatCard 
+                title="Tech Debt" 
+                value={projectStats?.techDebtEstimate ?? '0h'} 
+                trend="Estimated effort" 
+                icon={<Clock className="text-amber-500" />} 
+                color="bg-amber-500/10" 
+              />
+              <StatCard 
+                title="Code Bugs" 
+                value={projectStats?.totalBugs ?? 0} 
+                trend="Requires fix" 
+                icon={<Zap className="text-purple-500" />} 
+                color="bg-purple-500/10" 
+              />
             </div>
-          </>
+
+              {/* Activity Chart + Right Panel */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                {/* Activity Chart */}
+                <GlassCard className="lg:col-span-2">
+                  <div className="flex items-center justify-between mb-8">
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground">Commit Activity</h3>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedProject?.name} — daily code changes across branches
+                      </p>
+                    </div>
+                    <select className="bg-background/50 text-foreground border-none rounded-md text-xs px-2 py-1 outline-none">
+                      <option>Last 7 Days</option>
+                      <option>Last 30 Days</option>
+                    </select>
+                  </div>
+                  <div className="h-[300px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={activityData}>
+                        <defs>
+                          <linearGradient id="colorCommits" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} dy={10} />
+                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} />
+                        <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} itemStyle={{ color: '#fff' }} />
+                        <Area type="monotone" dataKey="commits" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCommits)" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </GlassCard>
+
+                {/* Right Panel: GitHub data OR AI Insights */}
+                <div>
+                  {selectedProject?.githubRepoUrl ? (
+                    <GitHubPanel project={selectedProject} />
+                  ) : (
+                    <GlassCard>
+                      <h3 className="text-lg font-bold mb-6 text-foreground">AI Insights</h3>
+                      <div className="space-y-4">
+                        <InsightItem icon={<ShieldCheck className="text-green-500" />} title="Security Patch Ready" desc="Update lodash to v4.17.21 to fix CVE-2020-8203." />
+                        <InsightItem icon={<Zap className="text-amber-500" />} title="Optimization Gap" desc="Component 'Header.tsx' re-renders excessively. Suggested useMemo hook." />
+                        <InsightItem icon={<Code className="text-blue-500" />} title="Style Inconsistency" desc="5 files use mixed indentation. Suggested 'prettier --write'." />
+                      </div>
+                      <button className="w-full mt-8 py-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors text-sm font-medium text-foreground">
+                        View All Insights
+                      </button>
+                    </GlassCard>
+                  )}
+                </div>
+              </div>
+
+              {/* Repository Browser Section */}
+              {selectedProject?.id && (
+                <div className="mt-8">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-bold text-foreground">Live Server Workspace</h3>
+                    <p className="text-sm text-muted-foreground">Browse files currently checked out into the backend AI pipeline.</p>
+                  </div>
+                  <RepositoryBrowser projectId={selectedProject.id} />
+                </div>
+              )}
+          </motion.div>
         ) : (
           <div className="flex flex-col items-center justify-center p-20 glass rounded-3xl border-dashed border-2 text-center space-y-4">
             <div className="p-4 rounded-full bg-primary/10">
