@@ -5,7 +5,6 @@ export interface AuthRequest {
 
 export interface AuthResponse {
   accessToken: string;
-  refreshToken: string;
 }
 
 export interface RegisterRequest {
@@ -17,10 +16,6 @@ export interface RegisterRequest {
 export interface VerificationRequest {
   email: string;
   code: string;
-}
-
-export interface RefreshTokenRequest {
-  refreshToken: string;
 }
 
 export interface ForgotPasswordRequest {

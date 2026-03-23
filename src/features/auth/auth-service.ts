@@ -1,16 +1,14 @@
-import apiClient from "../../lib/api-client";
-import { 
-  AuthRequest, 
-  AuthResponse, 
-  RegisterRequest, 
-  VerificationRequest, 
-  RefreshTokenRequest,
+import apiClient, { tokenStore } from "../../lib/api-client";
+import {
+  AuthRequest,
+  AuthResponse,
+  RegisterRequest,
+  VerificationRequest,
   ForgotPasswordRequest,
-  ResetPasswordRequest
+  ResetPasswordRequest,
 } from "../../types/auth";
 import { AxiosError } from "axios";
 
-// Define a type for the error response from the backend
 interface ApiError {
   userMessage: string;
 }
@@ -32,9 +30,7 @@ export const authService = {
   async login(request: AuthRequest): Promise<AuthResponse> {
     try {
       const response = await apiClient.post<AuthResponse>("/auth/login", request);
-      const { accessToken, refreshToken } = response.data;
-      localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("refreshToken", refreshToken);
+      tokenStore.set(response.data.accessToken);
       return response.data;
     } catch (error) {
       throw new Error(handleError(error));
@@ -68,17 +64,6 @@ export const authService = {
     }
   },
 
-  async refreshToken(request: RefreshTokenRequest): Promise<AuthResponse> {
-    try {
-      const response = await apiClient.post<AuthResponse>("/auth/refresh-token", request);
-      const { accessToken } = response.data;
-      localStorage.setItem("accessToken", accessToken);
-      return response.data;
-    } catch (error) {
-      throw new Error(handleError(error));
-    }
-  },
-
   async forgotPassword(request: ForgotPasswordRequest): Promise<string> {
     try {
       const response = await apiClient.post<string>("/auth/forgot-password", request);
@@ -97,16 +82,18 @@ export const authService = {
     }
   },
 
-  logout() {
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
+  async logout(): Promise<void> {
+    try {
+      await apiClient.post("/auth/logout");
+    } finally {
+      tokenStore.clear();
+    }
   },
 
   isAuthenticated(): boolean {
-    return !!localStorage.getItem("accessToken");
-  }
+    return !!tokenStore.get();
+  },
 };
 
-// Also export individual functions to match user's requested style if needed
 export const login = authService.login;
 export const register = authService.register;
