@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils'
 interface DevLogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl'
   showIcon?: boolean
+  showText?: boolean
   className?: string
 }
 
@@ -13,21 +14,23 @@ const sizeMap = {
   xl: { text: 'text-5xl', icon: 48, bracket: 'text-4xl' },
 }
 
-export function DevLogo({ size = 'md', showIcon = true, className }: DevLogoProps) {
+export function DevLogo({ size = 'md', showIcon = true, showText = true, className }: DevLogoProps) {
   const s = sizeMap[size]
 
   return (
     <div className={cn('flex items-center gap-2 select-none', className)}>
       {showIcon && <LogoIcon size={s.icon} />}
-      <span className={cn('font-bold tracking-tight leading-none', s.text)}>
-        <span className="text-foreground font-light">Developer</span>
-        <span
-          className="font-extrabold bg-gradient-to-br from-primary via-blue-500 to-cyan-400 bg-clip-text text-transparent"
-          style={{ fontStyle: 'italic', letterSpacing: '-0.02em' }}
-        >
-          Ev
+      {showText && (
+        <span className={cn('font-bold tracking-tight leading-none', s.text)}>
+          <span className="text-foreground font-light">Developer</span>
+          <span
+            className="font-extrabold bg-gradient-to-br from-primary via-blue-500 to-cyan-400 bg-clip-text text-transparent"
+            style={{ fontStyle: 'italic', letterSpacing: '-0.02em' }}
+          >
+            Ev
+          </span>
         </span>
-      </span>
+      )}
     </div>
   )
 }
