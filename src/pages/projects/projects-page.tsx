@@ -70,15 +70,16 @@ export function ProjectsPage() {
     try {
       const formData = new FormData()
       formData.append('project', file)
-      await apiClient.post('/ai/code-review', formData, {
+      await apiClient.post('/ai/code-review-zip', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setUploadState('done')
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      setTimeout(() => setUploadState('idle'), 3000)
     } catch {
       setUploadState('idle')
     } finally {
       e.target.value = ''
-      if (uploadState === 'done') setTimeout(() => setUploadState('idle'), 3000)
     }
   }
 

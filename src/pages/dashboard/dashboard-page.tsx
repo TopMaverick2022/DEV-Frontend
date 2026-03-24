@@ -22,7 +22,7 @@ import {
   FolderOpen
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { projectService } from '@/features/projects/project-service'
 import apiClient from '@/lib/api-client'
 import { useNavigate } from 'react-router-dom'
@@ -120,6 +120,7 @@ function ProjectSwitcher({
 // ── Dashboard Page ────────────────────────────────────────────────────────────
 export function DashboardPage() {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done'>('idle')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -132,8 +133,13 @@ export function DashboardPage() {
     try {
       const formData = new FormData()
       formData.append('project', file)
-      await apiClient.post('/ai/code-review-zip', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      const url = selectedProject?.id
+        ? `/ai/code-review-zip?projectId=${selectedProject.id}`
+        : '/ai/code-review-zip'
+      await apiClient.post(url, formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       setUploadState('done')
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      queryClient.invalidateQueries({ queryKey: ['projectStats', selectedProject?.id] })
       setTimeout(() => setUploadState('idle'), 3000)
     } catch (error) {
       console.error('Upload failed:', error)
@@ -231,7 +237,7 @@ export function DashboardPage() {
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadState === 'uploading'}
               className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50 border border-border/50"
-              title="Upload a project zip for AI code review"
+              title={selectedProject ? `Upload ZIP → link to "${selectedProject.name}"` : 'Upload a project zip for AI code review'}
             >
               {uploadState === 'uploading' ? <Loader2 className="w-4 h-4 animate-spin" />
                 : uploadState === 'done' ? <CheckCircle className="w-4 h-4 text-green-500" />
@@ -412,7 +418,7 @@ function CommitActivityChart({ project }: { project: Project | null }) {
           <option>Last 30 Days</option>
         </select>
       </div>
-      <div className="h-[200px] w-full mt-auto">
+      <div style={{ width: '100%', height: '300px' }} className="mt-4">
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={activityData}>
             <defs>
