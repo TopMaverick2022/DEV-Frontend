@@ -27,7 +27,7 @@ export function RepositoryBrowser({ projectId, className }: RepositoryBrowserPro
     setSelectedFileContent(null)
     try {
       const pathParam = pathArray.join("/")
-      const { data } = await apiClient.get<FileItem[]>(`/api/git/files/${projectId}?path=${encodeURIComponent(pathParam)}`)
+      const { data } = await apiClient.get<FileItem[]>(`/git/files/${projectId}?path=${encodeURIComponent(pathParam)}`)
       setItems(data)
     } catch (err: any) {
       setError("Failed to load directory. The repository might not be cloned yet.")
@@ -42,7 +42,7 @@ export function RepositoryBrowser({ projectId, className }: RepositoryBrowserPro
     setError(null)
     try {
       const pathParam = [...currentPath, fileName].join("/")
-      const { data } = await apiClient.get<string>(`/api/git/files/${projectId}/content?path=${encodeURIComponent(pathParam)}`)
+      const { data } = await apiClient.get<string>(`/git/files/${projectId}/content?path=${encodeURIComponent(pathParam)}`)
       setSelectedFileContent(data)
     } catch (err: any) {
       setError("Failed to read file.")

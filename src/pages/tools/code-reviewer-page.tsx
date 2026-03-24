@@ -66,7 +66,7 @@ export function CodeReviewerPage() {
     formData.append('project', file)
 
     try {
-      const response = await apiClient.post('/ai/code-review', formData, {
+      const response = await apiClient.post('/ai/code-review-zip', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
