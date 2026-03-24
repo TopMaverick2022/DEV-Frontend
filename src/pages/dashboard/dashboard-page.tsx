@@ -132,10 +132,11 @@ export function DashboardPage() {
     try {
       const formData = new FormData()
       formData.append('project', file)
-      await apiClient.post('/ai/code-review', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      await apiClient.post('/ai/code-review-zip', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
       setUploadState('done')
       setTimeout(() => setUploadState('idle'), 3000)
-    } catch {
+    } catch (error) {
+      console.error('Upload failed:', error)
       setUploadState('idle')
     } finally {
       e.target.value = ''
@@ -152,7 +153,7 @@ export function DashboardPage() {
     queryKey: ['projectStats', selectedProject?.id],
     queryFn: async () => {
       if (!selectedProject?.id) return null
-      const { data } = await apiClient.get(`/api/projects/${selectedProject.id}/stats`)
+      const { data } = await apiClient.get(`/projects/${selectedProject.id}/stats`)
       return data
     },
     enabled: !!selectedProject?.id,
@@ -303,57 +304,31 @@ export function DashboardPage() {
 
               {/* Activity Chart + Right Panel */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Activity Chart */}
-                <GlassCard className="lg:col-span-2">
-                  <div className="flex items-center justify-between mb-8">
-                    <div>
-                      <h3 className="text-lg font-bold text-foreground">Commit Activity</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {selectedProject?.name} — daily code changes across branches
-                      </p>
+                {selectedProject?.githubRepoUrl ? (
+                  <GitHubPanel 
+                    project={selectedProject} 
+                    leftPanelContent={<CommitActivityChart project={selectedProject} />}
+                  />
+                ) : (
+                  <>
+                    <div className="lg:col-span-2">
+                      <CommitActivityChart project={selectedProject} />
                     </div>
-                    <select className="bg-background/50 text-foreground border-none rounded-md text-xs px-2 py-1 outline-none">
-                      <option>Last 7 Days</option>
-                      <option>Last 30 Days</option>
-                    </select>
-                  </div>
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={activityData}>
-                        <defs>
-                          <linearGradient id="colorCommits" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} dy={10} />
-                        <YAxis axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} />
-                        <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} itemStyle={{ color: '#fff' }} />
-                        <Area type="monotone" dataKey="commits" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCommits)" />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </GlassCard>
-
-                {/* Right Panel: GitHub data OR AI Insights */}
-                <div>
-                  {selectedProject?.githubRepoUrl ? (
-                    <GitHubPanel project={selectedProject} />
-                  ) : (
-                    <GlassCard>
-                      <h3 className="text-lg font-bold mb-6 text-foreground">AI Insights</h3>
-                      <div className="space-y-4">
-                        <InsightItem icon={<ShieldCheck className="text-green-500" />} title="Security Patch Ready" desc="Update lodash to v4.17.21 to fix CVE-2020-8203." />
-                        <InsightItem icon={<Zap className="text-amber-500" />} title="Optimization Gap" desc="Component 'Header.tsx' re-renders excessively. Suggested useMemo hook." />
-                        <InsightItem icon={<Code className="text-blue-500" />} title="Style Inconsistency" desc="5 files use mixed indentation. Suggested 'prettier --write'." />
-                      </div>
-                      <button className="w-full mt-8 py-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors text-sm font-medium text-foreground">
-                        View All Insights
-                      </button>
-                    </GlassCard>
-                  )}
-                </div>
+                    <div>
+                      <GlassCard>
+                        <h3 className="text-lg font-bold mb-6 text-foreground">AI Insights</h3>
+                        <div className="space-y-4">
+                          <InsightItem icon={<ShieldCheck className="text-green-500" />} title="Security Patch Ready" desc="Update lodash to v4.17.21 to fix CVE-2020-8203." />
+                          <InsightItem icon={<Zap className="text-amber-500" />} title="Optimization Gap" desc="Component 'Header.tsx' re-renders excessively. Suggested useMemo hook." />
+                          <InsightItem icon={<Code className="text-blue-500" />} title="Style Inconsistency" desc="5 files use mixed indentation. Suggested 'prettier --write'." />
+                        </div>
+                        <button className="w-full mt-8 py-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors text-sm font-medium text-foreground">
+                          View All Insights
+                        </button>
+                      </GlassCard>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Repository Browser Section */}
@@ -419,5 +394,41 @@ function InsightItem({ icon, title, desc }: any) {
         <p className="text-xs text-muted-foreground line-clamp-2">{desc}</p>
       </div>
     </div>
+  )
+}
+
+function CommitActivityChart({ project }: { project: Project | null }) {
+  return (
+    <GlassCard className="flex flex-col h-full">
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h3 className="text-lg font-bold text-foreground">Commit Activity</h3>
+          <p className="text-sm text-muted-foreground">
+            {project?.name ?? 'Select project'} — daily code changes across branches
+          </p>
+        </div>
+        <select className="bg-background/50 text-foreground border-none rounded-md text-xs px-2 py-1 outline-none">
+          <option>Last 7 Days</option>
+          <option>Last 30 Days</option>
+        </select>
+      </div>
+      <div className="h-[200px] w-full mt-auto">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={activityData}>
+            <defs>
+              <linearGradient id="colorCommits" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
+                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} dy={10} />
+            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} />
+            <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} itemStyle={{ color: '#fff' }} />
+            <Area type="monotone" dataKey="commits" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCommits)" />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </GlassCard>
   )
 }

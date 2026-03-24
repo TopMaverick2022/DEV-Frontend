@@ -53,7 +53,7 @@ interface Commit {
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
-export function GitHubPanel({ project }: { project: Project }) {
+export function GitHubPanel({ project, leftPanelContent }: { project: Project, leftPanelContent?: React.ReactNode }) {
   const parsed = project.githubRepoUrl ? parseGitHubUrl(project.githubRepoUrl) : null
 
   const [token, setToken] = useState(getStoredToken)
@@ -182,9 +182,35 @@ export function GitHubPanel({ project }: { project: Project }) {
     }
   }
 
+  const renderLayout = (rightContent: React.ReactNode, bottomContent?: React.ReactNode) => {
+    if (leftPanelContent) {
+      return (
+        <>
+          <div className="lg:col-span-2 min-w-0">
+            {leftPanelContent}
+          </div>
+          <div className="lg:col-span-1 min-w-0">
+            {rightContent}
+          </div>
+          {bottomContent && (
+            <div className="lg:col-span-3">
+              {bottomContent}
+            </div>
+          )}
+        </>
+      )
+    }
+    return (
+      <div className="space-y-8">
+        {rightContent}
+        {bottomContent}
+      </div>
+    )
+  }
+
   // ── No GitHub URL ────────────────────────────────────────────────────────
   if (!project.githubRepoUrl) {
-    return (
+    return renderLayout(
       <GlassCard>
         <div className="flex items-center gap-3 mb-4">
           <Github className="w-5 h-5 text-muted-foreground" />
@@ -199,7 +225,7 @@ export function GitHubPanel({ project }: { project: Project }) {
 
   // ── Can't parse URL ──────────────────────────────────────────────────────
   if (!parsed) {
-    return (
+    return renderLayout(
       <GlassCard>
         <div className="flex items-center gap-3 mb-3">
           <Github className="w-5 h-5 text-amber-500" />
@@ -214,7 +240,7 @@ export function GitHubPanel({ project }: { project: Project }) {
 
   // ── Token Entry ──────────────────────────────────────────────────────────
   if (showTokenInput) {
-    return (
+    return renderLayout(
       <GlassCard>
         <div className="flex items-center gap-3 mb-1">
           <Github className="w-5 h-5 text-foreground" />
@@ -259,7 +285,7 @@ export function GitHubPanel({ project }: { project: Project }) {
 
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
-    return (
+    return renderLayout(
       <GlassCard>
         <div className="flex items-center gap-3">
           <Loader2 className="w-5 h-5 animate-spin text-primary" />
@@ -270,162 +296,160 @@ export function GitHubPanel({ project }: { project: Project }) {
   }
 
   // ── Connected: show real data ────────────────────────────────────────────
-  return (
-    <div className="space-y-6">
-      {/* Repo Metadata Card */}
-      <GlassCard>
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-foreground/10 rounded-xl">
-              <Github className="w-5 h-5" />
-            </div>
-            <div>
-              <a
-                href={repoData?.html_url ?? project.githubRepoUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-1"
-              >
-                {parsed.owner}/{parsed.repo}
-                <ExternalLink className="w-3 h-3 opacity-50" />
-              </a>
-              {repoData?.description && (
-                <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{repoData.description}</p>
-              )}
-            </div>
+  const rightContent = (
+    <GlassCard>
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="p-2 bg-foreground/10 rounded-xl shrink-0">
+            <Github className="w-5 h-5" />
           </div>
-          <div className="flex items-center gap-1.5 shrink-0">
-            <button
-              onClick={fetchData}
-              className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-muted-foreground"
-              title="Refresh"
+          <div className="min-w-0">
+            <a
+              href={repoData?.html_url ?? project.githubRepoUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-foreground hover:text-primary transition-colors flex items-center gap-1 min-w-0"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleDisconnect}
-              className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors text-muted-foreground hover:text-destructive"
-              title="Disconnect GitHub"
-            >
-              <Key className="w-3.5 h-3.5" />
-            </button>
+              <span className="truncate">{parsed.owner}/{parsed.repo}</span>
+              <ExternalLink className="w-3 h-3 opacity-50 shrink-0" />
+            </a>
+            {repoData?.description && (
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{repoData.description}</p>
+            )}
           </div>
         </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={fetchData}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-muted-foreground"
+            title="Refresh"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={handleDisconnect}
+            className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors text-muted-foreground hover:text-destructive"
+            title="Disconnect GitHub"
+          >
+            <Key className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
 
-        {repoData && (
-          <>
-            <div className="flex items-center gap-1.5 flex-wrap mb-4">
-              {repoData.private && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Private</span>
-              )}
-              {repoData.language && (
-                <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
-                  <Code2 className="w-3 h-3" /> {repoData.language}
-                </span>
-              )}
-              <span className="text-xs text-muted-foreground">Branch: <strong>{repoData.default_branch}</strong></span>
-            </div>
-
-            <div className="grid grid-cols-4 gap-3">
-              {[
-                { icon: Star, label: 'Stars', value: repoData.stargazers_count },
-                { icon: GitFork, label: 'Forks', value: repoData.forks_count },
-                { icon: AlertCircle, label: 'Issues', value: repoData.open_issues_count },
-                { icon: Eye, label: 'Watchers', value: repoData.watchers_count },
-              ].map(({ icon: Icon, label, value }) => (
-                <div key={label} className="text-center p-2 rounded-xl bg-muted/50">
-                  <Icon className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
-                  <p className="text-base font-bold">{value.toLocaleString()}</p>
-                  <p className="text-xs text-muted-foreground">{label}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* Server-Side Git Actions */}
-            <div className="mt-5 pt-5 border-t border-border/40">
-              <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Server Workspaces</h4>
-              
-              {actionMessage && (
-                <div className={cn("mb-3 px-3 py-2 rounded-lg text-sm border flex items-center gap-2", 
-                  actionMessage.type === 'success' ? "bg-green-500/10 border-green-500/20 text-green-500" : "bg-destructive/10 border-destructive/20 text-destructive")}>
-                  {actionMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                  {actionMessage.text}
-                </div>
-              )}
-
-              <div className="grid grid-cols-3 gap-2">
-                <button
-                  onClick={handleSync}
-                  disabled={syncing || analyzing || pushing}
-                  className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors disabled:opacity-50"
-                >
-                  {syncing ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <DownloadCloud className="w-4 h-4 text-primary" />}
-                  <span className="text-xs font-medium">Clone / Pull</span>
-                </button>
-                <button
-                  onClick={handleAnalyze}
-                  disabled={syncing || analyzing || pushing}
-                  className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors disabled:opacity-50"
-                  title="Run AI review on the cloned workspace"
-                >
-                  {analyzing ? <Loader2 className="w-4 h-4 animate-spin text-purple-500" /> : <BrainCircuit className="w-4 h-4 text-purple-500" />}
-                  <span className="text-xs font-medium">Analyze</span>
-                </button>
-                <button
-                  onClick={handlePush}
-                  disabled={syncing || analyzing || pushing}
-                  className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors disabled:opacity-50"
-                  title="Push staged server changes upstream"
-                >
-                  {pushing ? <Loader2 className="w-4 h-4 animate-spin text-amber-500" /> : <UploadCloud className="w-4 h-4 text-amber-500" />}
-                  <span className="text-xs font-medium">Push</span>
-                </button>
-              </div>
-            </div>
-          </>
-        )}
-      </GlassCard>
-
-      {/* Recent Commits */}
-      {commits.length > 0 && (
-        <GlassCard>
-          <div className="flex items-center gap-2 mb-4">
-            <GitCommit className="w-4 h-4 text-primary" />
-            <h3 className="font-semibold text-foreground text-sm">Recent Commits</h3>
-            <span className="ml-auto text-xs text-muted-foreground">{parsed.owner}/{parsed.repo}</span>
+      {repoData && (
+        <>
+          <div className="flex items-center gap-1.5 flex-wrap mb-4">
+            {repoData.private && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">Private</span>
+            )}
+            {repoData.language && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1">
+                <Code2 className="w-3 h-3" /> {repoData.language}
+              </span>
+            )}
+            <span className="text-xs text-muted-foreground">Branch: <strong>{repoData.default_branch}</strong></span>
           </div>
-          <div className="space-y-3">
-            {commits.map((c) => (
-              <a
-                key={c.sha}
-                href={c.html_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-start gap-3 group hover:bg-white/5 rounded-xl p-2 -mx-2 transition-colors"
-              >
-                <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-foreground line-clamp-1 group-hover:text-primary transition-colors">
-                    {c.commit.message.split('\n')[0]}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {c.commit.author.name} · {new Date(c.commit.author.date).toLocaleDateString()}
-                  </p>
-                </div>
-                <code className="text-xs text-muted-foreground font-mono shrink-0 mt-0.5">
-                  {c.sha.slice(0, 7)}
-                </code>
-              </a>
+
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { icon: Star, label: 'Stars', value: repoData.stargazers_count },
+              { icon: GitFork, label: 'Forks', value: repoData.forks_count },
+              { icon: AlertCircle, label: 'Issues', value: repoData.open_issues_count },
+              { icon: Eye, label: 'Watchers', value: repoData.watchers_count },
+            ].map(({ icon: Icon, label, value }) => (
+              <div key={label} className="text-center p-2 rounded-xl bg-muted/50">
+                <Icon className="w-4 h-4 mx-auto mb-1 text-muted-foreground" />
+                <p className="text-base font-bold">{value.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground">{label}</p>
+              </div>
             ))}
           </div>
-          <div className="mt-4 pt-3 border-t border-border/40">
-            <div className="flex items-center gap-2 text-xs text-green-500">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              Connected via GitHub API · Token stored locally
+
+          {/* Server-Side Git Actions */}
+          <div className="mt-5 pt-5 border-t border-border/40">
+            <h4 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Server Workspaces</h4>
+            
+            {actionMessage && (
+              <div className={cn("mb-3 px-3 py-2 rounded-lg text-sm border flex items-center gap-2", 
+                actionMessage.type === 'success' ? "bg-green-500/10 border-green-500/20 text-green-500" : "bg-destructive/10 border-destructive/20 text-destructive")}>
+                {actionMessage.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                {actionMessage.text}
+              </div>
+            )}
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={handleSync}
+                disabled={syncing || analyzing || pushing}
+                className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors disabled:opacity-50"
+              >
+                {syncing ? <Loader2 className="w-4 h-4 animate-spin text-primary" /> : <DownloadCloud className="w-4 h-4 text-primary" />}
+                <span className="text-xs font-medium">Clone / Pull</span>
+              </button>
+              <button
+                onClick={handleAnalyze}
+                disabled={syncing || analyzing || pushing}
+                className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors disabled:opacity-50"
+                title="Run AI review on the cloned workspace"
+              >
+                {analyzing ? <Loader2 className="w-4 h-4 animate-spin text-purple-500" /> : <BrainCircuit className="w-4 h-4 text-purple-500" />}
+                <span className="text-xs font-medium">Analyze</span>
+              </button>
+              <button
+                onClick={handlePush}
+                disabled={syncing || analyzing || pushing}
+                className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors disabled:opacity-50"
+                title="Push staged server changes upstream"
+              >
+                {pushing ? <Loader2 className="w-4 h-4 animate-spin text-amber-500" /> : <UploadCloud className="w-4 h-4 text-amber-500" />}
+                <span className="text-xs font-medium">Push</span>
+              </button>
             </div>
           </div>
-        </GlassCard>
+        </>
       )}
-    </div>
-  )
+    </GlassCard>
+  );
+
+  const bottomContent = commits.length > 0 ? (
+    <GlassCard>
+      <div className="flex items-center gap-2 mb-4">
+        <GitCommit className="w-4 h-4 text-primary" />
+        <h3 className="font-semibold text-foreground text-sm">Recent Commits</h3>
+        <span className="ml-auto text-xs text-muted-foreground">{parsed.owner}/{parsed.repo}</span>
+      </div>
+      <div className="space-y-3">
+        {commits.map((c) => (
+          <a
+            key={c.sha}
+            href={c.html_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-start gap-3 group hover:bg-white/5 rounded-xl p-2 -mx-2 transition-colors"
+          >
+            <div className="w-1.5 h-1.5 rounded-full bg-primary mt-2 shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-foreground line-clamp-1 group-hover:text-primary transition-colors">
+                {c.commit.message.split('\n')[0]}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {c.commit.author.name} · {new Date(c.commit.author.date).toLocaleDateString()}
+              </p>
+            </div>
+            <code className="text-xs text-muted-foreground font-mono shrink-0 mt-0.5">
+              {c.sha.slice(0, 7)}
+            </code>
+          </a>
+        ))}
+      </div>
+      <div className="mt-4 pt-3 border-t border-border/40">
+        <div className="flex items-center gap-2 text-xs text-green-500">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          Connected via GitHub API · Token stored locally
+        </div>
+      </div>
+    </GlassCard>
+  ) : null;
+
+  return renderLayout(rightContent, bottomContent);
 }
