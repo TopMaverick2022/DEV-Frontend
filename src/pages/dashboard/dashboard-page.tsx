@@ -149,6 +149,22 @@ export function DashboardPage() {
     }
   }
 
+  const [analyzingWorkspace, setAnalyzingWorkspace] = useState(false)
+  const handleAnalyzeWorkspace = async () => {
+    if (!selectedProject?.id) return
+    setAnalyzingWorkspace(true)
+    try {
+      await apiClient.post(`/ai/analyze-workspace/${selectedProject.id}`, null, {
+        params: { projectName: encodeURIComponent(selectedProject.name) }
+      })
+      queryClient.invalidateQueries({ queryKey: ['projectStats', selectedProject.id] })
+    } catch (error) {
+      console.error('Failed to trigger workspace analysis:', error)
+    } finally {
+      setAnalyzingWorkspace(false)
+    }
+  }
+
   const { data: projects, isLoading } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectService.getMyProjects(),
@@ -340,9 +356,22 @@ export function DashboardPage() {
               {/* Repository Browser Section */}
               {selectedProject?.id && (
                 <div className="mt-8">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-bold text-foreground">Live Server Workspace</h3>
-                    <p className="text-sm text-muted-foreground">Browse files currently checked out into the backend AI pipeline.</p>
+                  <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-foreground">Live Server Workspace</h3>
+                      <p className="text-sm text-muted-foreground">Browse files currently checked out into the backend AI pipeline.</p>
+                    </div>
+                    {/* Native Analyze trigger for non-GitHub environments */}
+                    {!selectedProject.githubRepoUrl && (
+                      <button 
+                        onClick={handleAnalyzeWorkspace}
+                        disabled={analyzingWorkspace}
+                        className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white shadow-lg shadow-purple-600/20 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all"
+                      >
+                        {analyzingWorkspace ? <Loader2 className="w-4 h-4 animate-spin" /> : <Loader2 className="w-4 h-4 hidden" />} {/* Visual balance */}
+                        AI Analyze Codebase
+                      </button>
+                    )}
                   </div>
                   <RepositoryBrowser projectId={selectedProject.id} />
                 </div>
