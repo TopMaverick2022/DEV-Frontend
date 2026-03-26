@@ -67,10 +67,10 @@ function ProjectSwitcher({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 glass border border-border/50 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-white/10 transition-all duration-200 min-w-[160px] max-w-[220px]"
+        className="flex items-center justify-between gap-2 glass border border-border/50 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-white/10 transition-all duration-200 w-[220px] shrink-0"
       >
         <FolderOpen className="w-4 h-4 text-primary shrink-0" />
-        <span className="truncate flex-1 text-left">
+        <span className="truncate flex-1 text-left max-w-[140px]">
           {selected?.name ?? 'Select project'}
         </span>
         <ChevronDown className={cn('w-4 h-4 shrink-0 text-muted-foreground transition-transform duration-200', open && 'rotate-180')} />
@@ -98,7 +98,7 @@ function ProjectSwitcher({
                   )}
                 >
                   <FolderOpen className="w-4 h-4 shrink-0 opacity-60" />
-                  <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{p.name}</p>
                     {p.description && (
                       <p className="truncate text-xs text-muted-foreground">{p.description}</p>
@@ -205,7 +205,7 @@ export function DashboardPage() {
 
       <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
         {/* ── Header Row ── */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-foreground">Project Overview</h1>
             <p className="text-muted-foreground mt-0.5">
@@ -217,7 +217,7 @@ export function DashboardPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center justify-start xl:justify-end gap-3 flex-wrap">
             <input ref={fileInputRef} type="file" accept=".zip" onChange={handleZipUpload} className="hidden" />
 
             {/* Project switcher — only when there are projects */}
@@ -235,7 +235,7 @@ export function DashboardPage() {
                 href={selectedProject.githubRepoUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 border border-border/50"
+                className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 border border-border/50 shrink-0"
               >
                 <Github className="w-4 h-4" /> Repo
               </a>
@@ -243,7 +243,7 @@ export function DashboardPage() {
 
             <button
               onClick={() => navigate('/projects')}
-              className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors border border-border/50"
+              className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors border border-border/50 shrink-0"
             >
               All Projects{hasProjects ? ` (${projects.length})` : ''}
             </button>
@@ -251,7 +251,7 @@ export function DashboardPage() {
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={uploadState === 'uploading'}
-              className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50 border border-border/50"
+              className="glass px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10 transition-colors disabled:opacity-50 border border-border/50 shrink-0"
               title="Upload a project zip for AI code review"
             >
               {uploadState === 'uploading' ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -262,7 +262,7 @@ export function DashboardPage() {
 
             <button
               onClick={() => setShowModal(true)}
-              className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-primary/25 hover:opacity-90"
+              className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-primary/25 hover:opacity-90 shrink-0"
             >
               <Plus className="w-4 h-4" /> New Project
             </button>
