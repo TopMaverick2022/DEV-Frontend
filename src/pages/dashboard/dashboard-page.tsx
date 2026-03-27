@@ -164,10 +164,24 @@ export function DashboardPage() {
     }
   }
 
-  const { data: projects, isLoading } = useQuery({
+  const { data: projects, isLoading, isError, error } = useQuery({
     queryKey: ['projects'],
     queryFn: () => projectService.getMyProjects(),
-  })
+  });
+
+  useEffect(() => {
+    const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || localStorage.getItem("accessToken");
+    console.log("Auth token from localStorage:", token);
+  }, []);
+
+  useEffect(() => {
+    console.log("Projects query result:", {
+      projects,
+      isLoading,
+      isError,
+      error,
+    });
+  }, [projects, isLoading, isError, error]);
 
   // Fetch dynamic AI health stats for the selected project
   const { data: projectStats, isLoading: statsLoading } = useQuery({
@@ -178,19 +192,29 @@ export function DashboardPage() {
       return data
     },
     enabled: !!selectedProject?.id,
-  })
+  });
 
   // Auto-select the first project when projects load, only once
   useEffect(() => {
     if (projects && projects.length > 0 && !selectedProject) {
       setSelectedProject(projects[0])
     }
-  }, [projects])
+  }, [projects]);
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-red-500">
+        <AlertCircle className="w-8 h-8 mb-2" />
+        <h2 className="text-xl font-semibold">Error Fetching Projects</h2>
+        <p className="text-sm text-red-400">{error?.message || 'An unknown error occurred.'}</p>
       </div>
     )
   }
