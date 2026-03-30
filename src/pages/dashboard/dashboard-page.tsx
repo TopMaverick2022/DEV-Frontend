@@ -1,9 +1,10 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
 import { CreateProjectModal } from '@/components/shared/create-project-modal'
 import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, Cell, Label
 } from 'recharts'
 import {
   Code,
@@ -31,15 +32,6 @@ import { GitHubPanel } from '@/components/shared/github-panel'
 import { RepositoryBrowser } from '@/components/shared/repository-browser'
 import { AlertCircle } from 'lucide-react'
 
-const activityData = [
-  { name: 'Mon', commits: 40, bugs: 24, coverage: 80 },
-  { name: 'Tue', commits: 30, bugs: 13, coverage: 82 },
-  { name: 'Wed', commits: 20, bugs: 98, coverage: 85 },
-  { name: 'Thu', commits: 27, bugs: 39, coverage: 84 },
-  { name: 'Fri', commits: 18, bugs: 48, coverage: 88 },
-  { name: 'Sat', commits: 23, bugs: 38, coverage: 90 },
-  { name: 'Sun', commits: 34, bugs: 43, coverage: 92 },
-]
 
 // ── Project Switcher Dropdown ────────────────────────────────────────────────
 function ProjectSwitcher({
@@ -369,17 +361,16 @@ export function DashboardPage() {
               />
             </div>
 
-              {/* Activity Chart + Right Panel */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {selectedProject?.githubRepoUrl ? (
                   <GitHubPanel 
                     project={selectedProject} 
-                    leftPanelContent={<CommitActivityChart project={selectedProject} />}
+                    leftPanelContent={<ProjectMetricsPane project={selectedProject} projectStats={projectStats} />}
                   />
                 ) : (
                   <>
                     <div className="lg:col-span-2">
-                      <CommitActivityChart project={selectedProject} />
+                      <ProjectMetricsPane project={selectedProject} projectStats={projectStats} />
                     </div>
                     <div>
                       <GlassCard>
@@ -477,38 +468,207 @@ function InsightItem({ icon, title, desc }: any) {
   )
 }
 
-function CommitActivityChart({ project }: { project: Project | null }) {
+function ProjectMetricsPane({ project, projectStats }: { project: Project | null, projectStats: any }) {
+  const [activeTab, setActiveTab] = useState<'activity' | 'health'>('activity')
+  
+  if (!project?.githubRepoUrl) {
+    return <ProjectHealthChart projectStats={projectStats} inPane={false} />
+  }
+  
   return (
-    <GlassCard className="flex flex-col h-full">
-      <div className="flex items-center justify-between mb-8">
+    <GlassCard className="flex flex-col h-full p-0 overflow-hidden">
+      <div className="flex border-b border-border/50 bg-background/20">
+        <button 
+          onClick={() => setActiveTab('activity')}
+          className={`flex-1 py-3 text-sm font-semibold transition-colors ${activeTab === 'activity' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
+        >
+          Commit Graph
+        </button>
+        <button 
+          onClick={() => setActiveTab('health')}
+          className={`flex-1 py-3 text-sm font-semibold transition-colors ${activeTab === 'health' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
+        >
+          Security & Health
+        </button>
+      </div>
+      <div className="flex-1 p-6">
+        {activeTab === 'activity' ? (
+          <CommitActivityChart project={project} inPane={true} />
+        ) : (
+          <ProjectHealthChart projectStats={projectStats} inPane={true} />
+        )}
+      </div>
+    </GlassCard>
+  )
+}
+
+function CommitActivityChart({ project, inPane = false }: { project: Project | null, inPane?: boolean }) {
+  const [period, setPeriod] = useState('Last 30 Days')
+  
+  const { data: rawCommits, isLoading } = useQuery({
+    queryKey: ['commitActivity', project?.id],
+    queryFn: async () => {
+      if (!project?.id) return []
+      const { data } = await apiClient.get(`/git/commits/${project.id}/activity`)
+      return data as { date: string, commits: number }[]
+    },
+    enabled: !!project?.id && !!project.githubRepoUrl
+  })
+
+  // Process data based on period
+  const chartData = useMemo(() => {
+    if (!rawCommits) return []
+    
+    const now = new Date()
+    let cutoff = new Date()
+    const isDaily = period === 'Last 7 Days' || period === 'Last 30 Days'
+    
+    if (isDaily) {
+      const daysCount = period === 'Last 7 Days' ? 7 : 30;
+      const buckets = [];
+      for (let i = daysCount - 1; i >= 0; i--) {
+        const d = new Date()
+        d.setDate(d.getDate() - i)
+        const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+        const match = rawCommits.find(c => c.date === key)
+        buckets.push({
+          name: key.substring(5), // MM-DD
+          commits: match ? match.commits : 0
+        })
+      }
+      return buckets
+    }
+
+    if (period === 'Last 12 Weeks') cutoff.setDate(now.getDate() - 84)
+    else if (period === 'Last 12 Months') cutoff.setMonth(now.getMonth() - 12)
+    else if (period === 'Last 5 Years') cutoff.setFullYear(now.getFullYear() - 5)
+    
+    // Filter by cutoff
+    const filtered = rawCommits.filter(c => new Date(c.date) >= cutoff)
+    if (filtered.length === 0) return []
+    
+    // Grouping
+    const grouped = filtered.reduce((acc, curr) => {
+      const d = new Date(curr.date)
+      let key = ''
+      if (period === 'Last 12 Weeks') {
+        const startOfWeek = new Date(d);
+        startOfWeek.setDate(d.getDate() - d.getDay());
+        key = `${startOfWeek.getMonth()+1}/${startOfWeek.getDate()}`
+      }
+      else if (period === 'Last 12 Months') key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` 
+      else key = `${d.getFullYear()}`
+        
+      acc[key] = (acc[key] || 0) + curr.commits
+      return acc
+    }, {} as Record<string, number>)
+    
+    return Object.entries(grouped).map(([name, commits]) => ({ name, commits }))
+  }, [rawCommits, period])
+
+  const content = (
+    <div className="flex flex-col h-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>
-          <h3 className="text-lg font-bold text-foreground">Commit Activity</h3>
+          <h3 className="text-lg font-bold text-foreground">Commit Graph</h3>
           <p className="text-sm text-muted-foreground">
             {project?.name ?? 'Select project'} — daily code changes across branches
           </p>
         </div>
-        <select className="bg-background/50 text-foreground border-none rounded-md text-xs px-2 py-1 outline-none">
+        <select 
+          value={period}
+          onChange={(e) => setPeriod(e.target.value)}
+          className="bg-background/50 text-foreground border border-border/50 rounded-md text-xs px-3 py-2 outline-none"
+        >
           <option>Last 7 Days</option>
           <option>Last 30 Days</option>
+          <option>Last 12 Months</option>
+          <option>Last 5 Years</option>
         </select>
       </div>
       <div style={{ width: '100%', height: '300px' }} className="mt-4">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={activityData}>
-            <defs>
-              <linearGradient id="colorCommits" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-            <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} dy={10} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} />
-            <Tooltip contentStyle={{ backgroundColor: 'rgba(0,0,0,0.8)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px' }} itemStyle={{ color: '#fff' }} />
-            <Area type="monotone" dataKey="commits" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorCommits)" />
-          </AreaChart>
-        </ResponsiveContainer>
+        {isLoading ? (
+          <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground gap-2">
+            <Loader2 className="w-6 h-6 animate-spin" />
+            <span className="text-sm">Loading activity...</span>
+          </div>
+        ) : chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ bottom: 15, left: 10 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }} dy={10}>
+                <Label value="Time Frame" offset={-10} position="insideBottom" fill="#888" fontSize={12} />
+              </XAxis>
+              <YAxis axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }}>
+                <Label value="Total Commits" angle={-90} position="insideLeft" fill="#888" fontSize={12} style={{ textAnchor: 'middle' }} />
+              </YAxis>
+              <Tooltip
+                cursor={{ fill: 'rgba(128,128,128,0.1)' }}
+                contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px' }}
+                itemStyle={{ color: 'var(--foreground)' }}
+                labelStyle={{ color: 'var(--muted-foreground)' }}
+              />
+              <Bar dataKey="commits" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm border-2 border-dashed border-border/40 rounded-xl">
+            No commits found for this period. Ensure the repo is synced.
+          </div>
+        )}
       </div>
-    </GlassCard>
+    </div>
   )
+
+  return inPane ? content : <GlassCard className="h-full">{content}</GlassCard>
+}
+
+function ProjectHealthChart({ projectStats, inPane = false }: { projectStats: any, inPane?: boolean }) {
+  const chartData = [
+    { name: 'Security', value: projectStats?.totalSecurityIssues || 0, color: '#ef4444' },
+    { name: 'Bugs', value: projectStats?.totalBugs || 0, color: '#eab308' },
+    { name: 'Performance', value: projectStats?.totalPerformanceIssues || 0, color: '#f97316' }
+  ]
+
+  const content = (
+    <div className="flex flex-col h-full">
+      <div className="mb-8">
+        <h3 className="text-lg font-bold text-foreground">Project Health Breakdown</h3>
+        <p className="text-sm text-muted-foreground">
+          Distribution of issues detected by AI analysis
+        </p>
+      </div>
+      <div style={{ width: '100%', height: '300px' }} className="mt-4">
+        {(projectStats?.totalSecurityIssues || projectStats?.totalBugs || projectStats?.totalPerformanceIssues) ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 15 }}>
+              <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(255,255,255,0.05)" />
+              <XAxis type="number" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 12 }}>
+                <Label value="Total Discovered Issues" offset={-10} position="insideBottom" fill="#888" fontSize={12} />
+              </XAxis>
+              <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{ fill: '#888', fontSize: 13 }} width={80} />
+              <Tooltip
+                cursor={{ fill: 'rgba(128,128,128,0.1)' }}
+                contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '12px' }}
+                itemStyle={{ color: 'var(--foreground)' }}
+                labelStyle={{ color: 'var(--muted-foreground)' }}
+              />
+              <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={32}>
+                {chartData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.color} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-green-500 font-medium border-2 border-dashed border-border/40 rounded-xl">
+            <CheckCircle className="w-5 h-5 mr-2" />
+            No issues detected!
+          </div>
+        )}
+      </div>
+    </div>
+  )
+
+  return inPane ? content : <GlassCard className="h-full">{content}</GlassCard>
 }
