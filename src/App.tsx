@@ -16,6 +16,10 @@ import { ExplainerPage } from '@/pages/tools/explainer-page'
 import { SecurityPage } from '@/pages/tools/security-page'
 import { PerformancePage } from '@/pages/tools/performance-page'
 import { DocsPage } from '@/pages/tools/docs-page'
+import { SecurityIssuesPage } from '@/pages/dashboard/security-issues-page'
+import { CodeBugsPage } from '@/pages/dashboard/code-bugs-page'
+import { HealthScorePage } from '@/pages/dashboard/health-score-page'
+import { TechDebtPage } from '@/pages/dashboard/tech-debt-page'
 import { AppLayout } from '@/components/layout/app-layout'
 import { SmoothScrollProvider } from './components/shared/smooth-scroll-provider'
 import { AuthProvider } from '@/features/auth/auth-context'
@@ -53,6 +57,13 @@ function App() {
               <Route path="/performance" element={<AppLayout><PerformancePage /></AppLayout>} />
               <Route path="/docs" element={<AppLayout><DocsPage /></AppLayout>} />
               <Route path="/health" element={<AppLayout><DashboardPage /></AppLayout>} />
+
+              {/* Dashboard stat drill-down pages */}
+              <Route path="/dashboard/projects/:projectId/security" element={<AppLayout><SecurityIssuesPage /></AppLayout>} />
+              <Route path="/dashboard/projects/:projectId/bugs" element={<AppLayout><CodeBugsPage /></AppLayout>} />
+              <Route path="/dashboard/projects/:projectId/health" element={<AppLayout><HealthScorePage /></AppLayout>} />
+              <Route path="/dashboard/projects/:projectId/tech-debt" element={<AppLayout><TechDebtPage /></AppLayout>} />
+
 
               {/* Fallback */}
               <Route path="*" element={<Navigate to="/" replace />} />

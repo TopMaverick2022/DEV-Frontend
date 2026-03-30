@@ -20,12 +20,15 @@ import {
   Upload,
   CheckCircle,
   ChevronDown,
-  FolderOpen
+  FolderOpen,
+  Bug,
+  TrendingDown,
+  X
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { projectService } from '@/features/projects/project-service'
-import apiClient from '@/lib/api-client'
+import apiClient, { tokenStore } from '@/lib/api-client'
 import { useNavigate } from 'react-router-dom'
 import { Project } from '@/types/project'
 import { GitHubPanel } from '@/components/shared/github-panel'
@@ -140,19 +143,72 @@ export function DashboardPage() {
     }
   }
 
-  const [analyzingWorkspace, setAnalyzingWorkspace] = useState(false)
-  const handleAnalyzeWorkspace = async () => {
+  // SSE-based analysis with real-time progress
+  const [analysisState, setAnalysisState] = useState<{
+    active: boolean
+    current: number
+    total: number
+    filename: string
+  }>({ active: false, current: 0, total: 0, filename: '' })
+
+  const handleAnalyzeWorkspace = () => {
     if (!selectedProject?.id) return
-    setAnalyzingWorkspace(true)
-    try {
-      await apiClient.post(`/ai/analyze-workspace/${selectedProject.id}`, null, {
-        params: { projectName: encodeURIComponent(selectedProject.name) }
-      })
-      queryClient.invalidateQueries({ queryKey: ['projectStats', selectedProject.id] })
-    } catch (error) {
-      console.error('Failed to trigger workspace analysis:', error)
-    } finally {
-      setAnalyzingWorkspace(false)
+
+    // Get the JWT token — EventSource doesn't support custom headers, so we pass it as ?token=
+    const token = tokenStore.get()
+      || localStorage.getItem('token')
+      || localStorage.getItem('auth_token')
+      || localStorage.getItem('accessToken')
+
+    if (!token) {
+      console.error('No auth token found, cannot start analysis')
+      return
+    }
+
+    const baseUrl = 'http://localhost:8080/api'
+    const url = `${baseUrl}/ai/analyze-workspace/${selectedProject.id}/stream?projectName=${encodeURIComponent(selectedProject.name)}&token=${encodeURIComponent(token)}`
+
+    setAnalysisState({ active: true, current: 0, total: 0, filename: 'Connecting...' })
+
+    const evtSource = new EventSource(url)
+
+    evtSource.onopen = () => {
+      setAnalysisState(prev => ({ ...prev, filename: 'Initializing...' }))
+    }
+
+    evtSource.onmessage = (event) => {
+      const raw = event.data
+      if (raw === 'COMPLETE') {
+        evtSource.close()
+        setAnalysisState(prev => ({ ...prev, active: false, filename: 'Done!' }))
+        queryClient.invalidateQueries({ queryKey: ['projectStats', selectedProject.id] })
+        queryClient.invalidateQueries({ queryKey: ['geminiQuota'] })
+      } else if (raw.startsWith('ERROR:')) {
+        evtSource.close()
+        const msg = raw.replace('ERROR:', '')
+        setAnalysisState(prev => ({ ...prev, active: false, filename: `Error: ${msg}` }))
+        console.error('Analysis error:', msg)
+      } else {
+        try {
+          const parsed = JSON.parse(raw)
+          setAnalysisState({
+            active: true,
+            current: parsed.current,
+            total: parsed.total,
+            filename: parsed.filename
+          })
+        } catch { /* ignore parse errors for non-JSON keepalive frames */ }
+      }
+    }
+
+    evtSource.onerror = (e) => {
+      console.error('SSE connection error:', e)
+      evtSource.close()
+      setAnalysisState(prev => ({
+        ...prev,
+        active: false,
+        filename: 'Connection failed. Check console for details.'
+      }))
     }
   }
 
@@ -316,10 +372,10 @@ export function DashboardPage() {
                 {projectStats.syncStatus === 'NEEDS_ANALYSIS' ? (
                   <button 
                     onClick={handleAnalyzeWorkspace}
-                    disabled={analyzingWorkspace}
+                    disabled={analysisState.active}
                     className="px-4 py-1.5 bg-amber-500 text-black rounded-lg text-xs font-bold hover:bg-amber-400 disabled:opacity-50 transition-colors shrink-0"
                   >
-                    {analyzingWorkspace ? 'Analyzing...' : 'Analyze Now'}
+                    {analysisState.active ? 'Analyzing...' : 'Analyze Now'}
                   </button>
                 ) : (
                   <p className="text-[10px] uppercase font-bold text-amber-500/70 tracking-widest px-2 py-1 border border-amber-500/20 rounded-md">
@@ -329,37 +385,44 @@ export function DashboardPage() {
               </GlassCard>
             )}
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            {/* Stats Grid — clickable cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-4">
               <StatCard 
                 title="AI Health Score" 
                 value={`${projectStats?.healthScore ?? 0}%`} 
                 trend={`${projectStats?.totalFilesAnalyzed ?? 0} files scanned`} 
                 icon={<Activity className="text-green-500" />} 
-                color="bg-green-500/10" 
+                color="bg-green-500/10"
+                onClick={() => selectedProject?.id && navigate(`/dashboard/projects/${selectedProject.id}/health`)}
               />
               <StatCard 
                 title="Security Issues" 
                 value={projectStats?.totalSecurityIssues ?? 0} 
-                trend="AI Detected" 
+                trend="Click to see vulnerabilities" 
                 icon={<ShieldCheck className="text-blue-500" />} 
-                color="bg-blue-500/10" 
+                color="bg-blue-500/10"
+                onClick={() => selectedProject?.id && navigate(`/dashboard/projects/${selectedProject.id}/security`)}
               />
               <StatCard 
-                title="Tech Debt" 
+                title="Estimated Effort" 
                 value={projectStats?.techDebtEstimate ?? '0h'} 
-                trend="Estimated effort" 
+                trend="Click to see what this means" 
                 icon={<Clock className="text-amber-500" />} 
-                color="bg-amber-500/10" 
+                color="bg-amber-500/10"
+                onClick={() => selectedProject?.id && navigate(`/dashboard/projects/${selectedProject.id}/tech-debt`)}
               />
               <StatCard 
                 title="Code Bugs" 
                 value={projectStats?.totalBugs ?? 0} 
-                trend="Requires fix" 
+                trend="Click to see all bugs" 
                 icon={<Zap className="text-purple-500" />} 
-                color="bg-purple-500/10" 
+                color="bg-purple-500/10"
+                onClick={() => selectedProject?.id && navigate(`/dashboard/projects/${selectedProject.id}/bugs`)}
               />
             </div>
+
+            {/* Gemini API Quota Bar */}
+            <GeminiQuotaBar />
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {selectedProject?.githubRepoUrl ? (
@@ -401,10 +464,10 @@ export function DashboardPage() {
                     {!selectedProject.githubRepoUrl && (
                       <button 
                         onClick={handleAnalyzeWorkspace}
-                        disabled={analyzingWorkspace}
+                        disabled={analysisState.active}
                         className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white shadow-lg shadow-purple-600/20 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all"
                       >
-                        {analyzingWorkspace ? <Loader2 className="w-4 h-4 animate-spin" /> : <Loader2 className="w-4 h-4 hidden" />} {/* Visual balance */}
+                        {analysisState.active ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                         AI Analyze Codebase
                       </button>
                     )}
@@ -433,24 +496,71 @@ export function DashboardPage() {
           </div>
         )}
       </div>
+
+      {/* SSE Analysis Progress Overlay */}
+      <AnimatePresence>
+        {analysisState.active && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-md glass border border-border rounded-2xl p-6 space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg">AI Analyzing Codebase</h3>
+                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              </div>
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground truncate max-w-[70%]">{analysisState.filename}</span>
+                  <span className="font-mono font-bold text-primary">{analysisState.current}/{analysisState.total}</span>
+                </div>
+                <div className="w-full bg-muted/30 rounded-full h-3 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-primary rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: analysisState.total > 0 ? `${(analysisState.current / analysisState.total) * 100}%` : '5%' }}
+                    transition={{ duration: 0.3 }}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Large projects may take a few minutes. Please keep this page open.
+              </p>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </>
   )
 }
 
-function StatCard({ title, value, trend, icon, color }: any) {
+function StatCard({ title, value, trend, icon, color, onClick }: any) {
   return (
-    <GlassCard className="flex flex-col gap-4">
+    <GlassCard
+      className={cn('flex flex-col gap-4', onClick && 'cursor-pointer hover:scale-[1.02] hover:shadow-xl transition-transform')} 
+      onClick={onClick}
+    >
       <div className="flex items-center justify-between">
         <div className={cn("p-2 rounded-lg", color)}>
           {icon}
         </div>
-        <span className="text-xs font-medium text-green-500 flex items-center gap-1 bg-green-500/10 px-2 py-0.5 rounded-full">
-          {trend} <ArrowUpRight className="w-3 h-3" />
-        </span>
+        {onClick && (
+          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1 bg-muted/30 px-2 py-0.5 rounded-full">
+            Details <ArrowUpRight className="w-3 h-3" />
+          </span>
+        )}
       </div>
       <div>
         <p className="text-sm font-medium text-muted-foreground">{title}</p>
         <p className="text-3xl font-bold">{value}</p>
+        <p className="text-xs text-muted-foreground mt-1">{trend}</p>
       </div>
     </GlassCard>
   )
@@ -465,6 +575,43 @@ function InsightItem({ icon, title, desc }: any) {
         <p className="text-xs text-muted-foreground line-clamp-2">{desc}</p>
       </div>
     </div>
+  )
+}
+
+function GeminiQuotaBar() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['geminiQuota'],
+    queryFn: async () => {
+      const { data } = await apiClient.get('/ai/quota')
+      return data as { tokensUsedToday: number; dailyTokenLimit: number }
+    },
+    refetchInterval: 30_000, // refresh every 30s during active sessions
+  })
+
+  if (isLoading || !data) return null
+
+  const percent = Math.min(100, Math.round((data.tokensUsedToday / data.dailyTokenLimit) * 100))
+  const barColor = percent < 60 ? 'bg-green-500' : percent < 85 ? 'bg-amber-500' : 'bg-red-500'
+  const textColor = percent < 60 ? 'text-green-500' : percent < 85 ? 'text-amber-500' : 'text-red-500'
+
+  const fmt = (n: number) => n >= 1_000_000 ? `${(n/1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n/1_000).toFixed(1)}K` : String(n)
+
+  return (
+    <GlassCard className="py-3 px-4 flex items-center gap-4">
+      <div className="shrink-0">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gemini API Quota</p>
+        <p className={`text-sm font-bold ${textColor}`}>{fmt(data.tokensUsedToday)} / {fmt(data.dailyTokenLimit)} tokens</p>
+      </div>
+      <div className="flex-1">
+        <div className="w-full bg-muted/30 rounded-full h-2.5 overflow-hidden mb-1">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+        <p className="text-xs text-muted-foreground text-right">{percent}% used today · resets at midnight</p>
+      </div>
+    </GlassCard>
   )
 }
 
