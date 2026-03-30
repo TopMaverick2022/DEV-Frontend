@@ -302,16 +302,38 @@ export function DashboardPage() {
             transition={{ duration: 0.25 }}
             className="space-y-8"
           >
-            {/* Out of Sync Warning Banner */}
-            {projectStats?.syncStatus === 'OUT_OF_SYNC' && (
+            {/* Sync Warning Banner */}
+            {(projectStats?.syncStatus === 'NEEDS_PULL' || projectStats?.syncStatus === 'NEEDS_ANALYSIS' || projectStats?.syncStatus === 'OUT_OF_SYNC') && (
               <GlassCard className="bg-amber-500/10 border-amber-500/20 py-3 px-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <AlertCircle className="w-5 h-5 text-amber-500" />
+                  <AlertCircle className="w-5 h-5 text-amber-500 shrink-0" />
                   <div>
-                    <h4 className="text-sm font-bold text-amber-500">Repository Out of Sync</h4>
-                    <p className="text-xs text-amber-400">New commits detected on GitHub that haven't been analyzed. Please Pull & Analyze.</p>
+                    {projectStats.syncStatus === 'NEEDS_PULL' || projectStats.syncStatus === 'OUT_OF_SYNC' ? (
+                      <>
+                        <h4 className="text-sm font-bold text-amber-500">Repository Needs Updating</h4>
+                        <p className="text-xs text-amber-400">New commits detected on GitHub that haven't been pulled to the server yet.</p>
+                      </>
+                    ) : (
+                      <>
+                        <h4 className="text-sm font-bold text-amber-500">Analysis Pending</h4>
+                        <p className="text-xs text-amber-400">Files on server are up to date, but the AI hasn't analyzed them yet.</p>
+                      </>
+                    )}
                   </div>
                 </div>
+                {projectStats.syncStatus === 'NEEDS_ANALYSIS' ? (
+                  <button 
+                    onClick={handleAnalyzeWorkspace}
+                    disabled={analyzingWorkspace}
+                    className="px-4 py-1.5 bg-amber-500 text-black rounded-lg text-xs font-bold hover:bg-amber-400 disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    {analyzingWorkspace ? 'Analyzing...' : 'Analyze Now'}
+                  </button>
+                ) : (
+                  <p className="text-[10px] uppercase font-bold text-amber-500/70 tracking-widest px-2 py-1 border border-amber-500/20 rounded-md">
+                    Please Sync in Git Panel
+                  </p>
+                )}
               </GlassCard>
             )}
 

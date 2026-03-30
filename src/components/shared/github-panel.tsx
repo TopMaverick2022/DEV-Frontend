@@ -5,6 +5,7 @@ import {
   GitCommit, Loader2, Key, CheckCircle2, ExternalLink, RefreshCw,
   DownloadCloud, UploadCloud, BrainCircuit
 } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
 import { Project } from '@/types/project'
 import { cn } from '@/lib/utils'
@@ -54,6 +55,7 @@ interface Commit {
 
 // ── Main Component ───────────────────────────────────────────────────────────
 export function GitHubPanel({ project, leftPanelContent }: { project: Project, leftPanelContent?: React.ReactNode }) {
+  const queryClient = useQueryClient()
   const parsed = project.githubRepoUrl ? parseGitHubUrl(project.githubRepoUrl) : null
 
   const [token, setToken] = useState(getStoredToken)
@@ -143,6 +145,8 @@ export function GitHubPanel({ project, leftPanelContent }: { project: Project, l
         projectId: project.id
       })
       setActionMessage({ type: 'success', text: 'Repository cloned/updated on server successfully.' })
+      // Refresh project stats to reflect that we now need analysis, not sync
+      queryClient.invalidateQueries({ queryKey: ['projectStats', project.id] })
     } catch (e: any) {
       setActionMessage({ type: 'error', text: e.response?.data || 'Failed to sync repository.' })
     } finally {
@@ -156,6 +160,8 @@ export function GitHubPanel({ project, leftPanelContent }: { project: Project, l
     try {
       await apiClient.post(`/ai/analyze-workspace/${project.id}?projectName=${encodeURIComponent(project.name)}`)
       setActionMessage({ type: 'success', text: 'AI Analysis complete! Check project details or Insights.' })
+      // Refresh stats to clear the "Analysis Pending" warning
+      queryClient.invalidateQueries({ queryKey: ['projectStats', project.id] })
     } catch (e: any) {
       setActionMessage({ type: 'error', text: 'Failed to analyze workspace. Ensure you have synced the repo first.' })
     } finally {
