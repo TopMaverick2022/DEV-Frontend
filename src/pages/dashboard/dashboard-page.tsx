@@ -34,6 +34,8 @@ import { Project } from '@/types/project'
 import { GitHubPanel } from '@/components/shared/github-panel'
 import { RepositoryBrowser } from '@/components/shared/repository-browser'
 import { AlertCircle } from 'lucide-react'
+import Swal from 'sweetalert2'
+import './quota-alerts.css' // We'll create this for custom styling
 
 
 // ── Project Switcher Dropdown ────────────────────────────────────────────────
@@ -118,26 +120,62 @@ export function DashboardPage() {
   const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done'>('idle')
+  const [uploadProgress, setUploadProgress] = useState({ loaded: 0, total: 0, percent: 0 })
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const sizes = ['Bytes', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  }
 
   const handleZipUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadState('uploading')
+    setUploadProgress({ loaded: 0, total: file.size, percent: 0 })
+
     try {
       const formData = new FormData()
       formData.append('project', file)
       // Always create a new project from ZIP, consistent with projects page
-      await apiClient.post('/ai/code-review-zip', formData, {
+      const { data } = await apiClient.post('/ai/code-review-zip', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
+        onUploadProgress: (progressEvent) => {
+          const loaded = progressEvent.loaded
+          const total = progressEvent.total || file.size
+          const percent = Math.round((loaded * 100) / total)
+          setUploadProgress({ loaded, total, percent })
+        }
       })
       setUploadState('done')
       queryClient.invalidateQueries({ queryKey: ['projects'] })
+      
+      // Auto-trigger analysis for the new project
+      if (data?.projectId) {
+        handleAnalyzeWorkspace(data.projectId, data.projectName || file.name)
+      }
+
       setTimeout(() => setUploadState('idle'), 3000)
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload failed:', error)
       setUploadState('idle')
+      
+      // SweetAlert for quota exhaustion
+      if (error.response?.status === 429) {
+        Swal.fire({
+          title: 'Gemini Quota Exceeded',
+          text: 'You have reached the daily limit for the Gemini API free tier (1,500 requests). Please try again tomorrow.',
+          icon: 'warning',
+          background: 'rgba(15, 15, 20, 0.95)',
+          color: '#fff',
+          confirmButtonColor: '#3b82f6',
+          backdrop: `rgba(0,0,0,0.4) blur(4px)`
+        })
+      }
     } finally {
       e.target.value = ''
     }
@@ -149,10 +187,15 @@ export function DashboardPage() {
     current: number
     total: number
     filename: string
-  }>({ active: false, current: 0, total: 0, filename: '' })
+    logs: string[]
+    isComplete: boolean
+  }>({ active: false, current: 0, total: 0, filename: '', logs: [], isComplete: false })
 
-  const handleAnalyzeWorkspace = () => {
-    if (!selectedProject?.id) return
+  const handleAnalyzeWorkspace = (projId?: number, projName?: string) => {
+    const id = projId || selectedProject?.id
+    const name = projName || selectedProject?.name || 'Workspace'
+    
+    if (!id) return
 
     // Get the JWT token — EventSource doesn't support custom headers, so we pass it as ?token=
     const token = tokenStore.get()
@@ -166,9 +209,9 @@ export function DashboardPage() {
     }
 
     const baseUrl = 'http://localhost:8080/api'
-    const url = `${baseUrl}/ai/analyze-workspace/${selectedProject.id}/stream?projectName=${encodeURIComponent(selectedProject.name)}&token=${encodeURIComponent(token)}`
+    const url = `${baseUrl}/ai/analyze-workspace/${id}/stream?projectName=${encodeURIComponent(name)}&token=${encodeURIComponent(token)}`
 
-    setAnalysisState({ active: true, current: 0, total: 0, filename: 'Connecting...' })
+    setAnalysisState({ active: true, current: 0, total: 0, filename: 'Connecting...', logs: [], isComplete: false })
 
     const evtSource = new EventSource(url)
 
@@ -180,22 +223,43 @@ export function DashboardPage() {
       const raw = event.data
       if (raw === 'COMPLETE') {
         evtSource.close()
-        setAnalysisState(prev => ({ ...prev, active: false, filename: 'Done!' }))
-        queryClient.invalidateQueries({ queryKey: ['projectStats', selectedProject.id] })
+        setAnalysisState(prev => ({ ...prev, filename: 'Analysis Complete!', isComplete: true }))
+        queryClient.invalidateQueries({ queryKey: ['projectStats', id] })
         queryClient.invalidateQueries({ queryKey: ['geminiQuota'] })
       } else if (raw.startsWith('ERROR:')) {
         evtSource.close()
         const msg = raw.replace('ERROR:', '')
         setAnalysisState(prev => ({ ...prev, active: false, filename: `Error: ${msg}` }))
         console.error('Analysis error:', msg)
+
+        // SweetAlert for quota exhaustion in SSE
+        if (msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) {
+          Swal.fire({
+            title: 'Gemini Quota Exceeded',
+            text: 'Daily limit reached (1,500 requests). Please try again tomorrow.',
+            icon: 'error',
+            background: 'rgba(15, 15, 20, 0.95)',
+            color: '#fff',
+            confirmButtonColor: '#3b82f6',
+            backdrop: `rgba(0,0,0,0.4) blur(4px)`
+          })
+        }
       } else {
         try {
-          const parsed = JSON.parse(raw)
-          setAnalysisState({
-            active: true,
-            current: parsed.current,
-            total: parsed.total,
-            filename: parsed.filename
+          const parsed = JSON.parse(raw) as { current?: number; total?: number; filename?: string }
+          setAnalysisState(prev => {
+            const nextLogs = [...prev.logs]
+            if (parsed.filename && parsed.filename !== 'Starting analysis...' && !nextLogs.includes(parsed.filename)) {
+              nextLogs.push(parsed.filename)
+            }
+            return {
+              ...prev,
+              active: true,
+              current: parsed.current ?? prev.current,
+              total: parsed.total ?? prev.total,
+              filename: parsed.filename ?? prev.filename,
+              logs: nextLogs
+            }
           })
         } catch { /* ignore parse errors for non-JSON keepalive frames */ }
       }
@@ -371,7 +435,7 @@ export function DashboardPage() {
                 </div>
                 {projectStats.syncStatus === 'NEEDS_ANALYSIS' ? (
                   <button 
-                    onClick={handleAnalyzeWorkspace}
+                    onClick={() => handleAnalyzeWorkspace()}
                     disabled={analysisState.active}
                     className="px-4 py-1.5 bg-amber-500 text-black rounded-lg text-xs font-bold hover:bg-amber-400 disabled:opacity-50 transition-colors shrink-0"
                   >
@@ -421,8 +485,6 @@ export function DashboardPage() {
               />
             </div>
 
-            {/* Gemini API Quota Bar */}
-            <GeminiQuotaBar />
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 {selectedProject?.githubRepoUrl ? (
@@ -463,7 +525,7 @@ export function DashboardPage() {
                     {/* Native Analyze trigger for non-GitHub environments */}
                     {!selectedProject.githubRepoUrl && (
                       <button 
-                        onClick={handleAnalyzeWorkspace}
+                        onClick={() => handleAnalyzeWorkspace()}
                         disabled={analysisState.active}
                         className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white shadow-lg shadow-purple-600/20 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all"
                       >
@@ -513,25 +575,111 @@ export function DashboardPage() {
               className="w-full max-w-md glass border border-border rounded-2xl p-6 space-y-4"
             >
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-lg">AI Analyzing Codebase</h3>
-                <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                <h3 className="font-bold text-lg">{analysisState.isComplete ? 'Analysis Summary' : 'AI Analyzing Codebase'}</h3>
+                {analysisState.isComplete ? (
+                   <CheckCircle className="w-5 h-5 text-green-500" />
+                ) : (
+                   <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground truncate max-w-[70%]">
+                    {analysisState.isComplete ? `Analysed ${analysisState.logs.length} files successfully` : analysisState.filename}
+                  </span>
+                  {!analysisState.isComplete && (
+                    <span className="font-mono font-bold text-primary">{analysisState.current}/{analysisState.total}</span>
+                  )}
+                </div>
+                {!analysisState.isComplete && (
+                  <div className="w-full bg-muted/30 rounded-full h-3 overflow-hidden">
+                    <motion.div
+                      className="h-full bg-primary rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: analysisState.total > 0 ? `${(analysisState.current / analysisState.total) * 100}%` : '5%' }}
+                      transition={{ duration: 0.3 }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Analysis Log Log */}
+              {analysisState.logs.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Processed Files</p>
+                  <div className="bg-black/20 rounded-xl border border-border/50 p-3 max-h-60 overflow-y-auto custom-scrollbar">
+                    {analysisState.logs.map((log, i) => (
+                      <div key={i} className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground border-b border-white/5 last:border-0 hover:bg-white/5 px-1 rounded transition-colors">
+                        <CheckCircle className="w-3 h-3 text-green-500/60 shrink-0" />
+                        <span className="truncate">{log}</span>
+                        {i === analysisState.logs.length - 1 && !analysisState.isComplete && (
+                          <span className="ml-auto flex gap-0.5">
+                            <span className="w-1 h-1 bg-primary rounded-full animate-bounce" />
+                            <span className="w-1 h-1 bg-primary rounded-full animate-bounce [animation-delay:0.2s]" />
+                            <span className="w-1 h-1 bg-primary rounded-full animate-bounce [animation-delay:0.4s]" />
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {analysisState.isComplete ? (
+                <button
+                  onClick={() => setAnalysisState(prev => ({ ...prev, active: false }))}
+                  className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-all active:scale-95 mt-4"
+                >
+                  Dismiss Log
+                </button>
+              ) : (
+                <p className="text-xs text-muted-foreground text-center italic">
+                  Processing batch of files with Gemini AI...
+                </p>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Upload Progress Overlay */}
+      <AnimatePresence>
+        {uploadState === 'uploading' && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-md glass border border-border rounded-2xl p-6 space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-lg">Uploading Project ZIP</h3>
+                <Upload className="w-5 h-5 text-primary animate-pulse" />
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground truncate max-w-[70%]">{analysisState.filename}</span>
-                  <span className="font-mono font-bold text-primary">{analysisState.current}/{analysisState.total}</span>
+                  <span className="text-muted-foreground">
+                    {formatBytes(uploadProgress.loaded)} / {formatBytes(uploadProgress.total)}
+                  </span>
+                  <span className="font-mono font-bold text-primary">{uploadProgress.percent}%</span>
                 </div>
                 <div className="w-full bg-muted/30 rounded-full h-3 overflow-hidden">
                   <motion.div
                     className="h-full bg-primary rounded-full"
                     initial={{ width: 0 }}
-                    animate={{ width: analysisState.total > 0 ? `${(analysisState.current / analysisState.total) * 100}%` : '5%' }}
-                    transition={{ duration: 0.3 }}
+                    animate={{ width: `${uploadProgress.percent}%` }}
+                    transition={{ duration: 0.2 }}
                   />
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                Large projects may take a few minutes. Please keep this page open.
+              <p className="text-xs text-muted-foreground italic">
+                Please do not close this window until the upload is complete.
               </p>
             </motion.div>
           </motion.div>
@@ -578,42 +726,6 @@ function InsightItem({ icon, title, desc }: any) {
   )
 }
 
-function GeminiQuotaBar() {
-  const { data, isLoading } = useQuery({
-    queryKey: ['geminiQuota'],
-    queryFn: async () => {
-      const { data } = await apiClient.get('/ai/quota')
-      return data as { tokensUsedToday: number; dailyTokenLimit: number }
-    },
-    refetchInterval: 30_000, // refresh every 30s during active sessions
-  })
-
-  if (isLoading || !data) return null
-
-  const percent = Math.min(100, Math.round((data.tokensUsedToday / data.dailyTokenLimit) * 100))
-  const barColor = percent < 60 ? 'bg-green-500' : percent < 85 ? 'bg-amber-500' : 'bg-red-500'
-  const textColor = percent < 60 ? 'text-green-500' : percent < 85 ? 'text-amber-500' : 'text-red-500'
-
-  const fmt = (n: number) => n >= 1_000_000 ? `${(n/1_000_000).toFixed(2)}M` : n >= 1_000 ? `${(n/1_000).toFixed(1)}K` : String(n)
-
-  return (
-    <GlassCard className="py-3 px-4 flex items-center gap-4">
-      <div className="shrink-0">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Gemini API Quota</p>
-        <p className={`text-sm font-bold ${textColor}`}>{fmt(data.tokensUsedToday)} / {fmt(data.dailyTokenLimit)} tokens</p>
-      </div>
-      <div className="flex-1">
-        <div className="w-full bg-muted/30 rounded-full h-2.5 overflow-hidden mb-1">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-        <p className="text-xs text-muted-foreground text-right">{percent}% used today · resets at midnight</p>
-      </div>
-    </GlassCard>
-  )
-}
 
 function ProjectMetricsPane({ project, projectStats }: { project: Project | null, projectStats: any }) {
   const [activeTab, setActiveTab] = useState<'activity' | 'health'>('activity')

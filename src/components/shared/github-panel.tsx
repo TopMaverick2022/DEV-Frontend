@@ -163,7 +163,25 @@ export function GitHubPanel({ project, leftPanelContent }: { project: Project, l
       // Refresh stats to clear the "Analysis Pending" warning
       queryClient.invalidateQueries({ queryKey: ['projectStats', project.id] })
     } catch (e: any) {
-      setActionMessage({ type: 'error', text: 'Failed to analyze workspace. Ensure you have synced the repo first.' })
+      console.error("Analysis Error:", e);
+      const backendError = e.response?.data?.userMessage || e.response?.data?.error || (typeof e.response?.data === 'string' ? e.response?.data : null);
+      const errorMessage = backendError || 'Failed to analyze workspace. Ensure you have synced the repo first.';
+      
+      setActionMessage({ type: 'error', text: errorMessage })
+
+      if (e.response?.status === 429) {
+        import('sweetalert2').then(Swal => {
+           Swal.default.fire({
+             title: 'Gemini Quota Exceeded',
+             text: errorMessage,
+             icon: 'error',
+             background: 'rgba(15, 15, 20, 0.95)',
+             color: '#fff',
+             confirmButtonColor: '#3b82f6',
+             backdrop: `rgba(0,0,0,0.4) blur(4px)`
+           });
+        });
+      }
     } finally {
       setAnalyzing(false)
     }
