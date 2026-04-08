@@ -72,6 +72,7 @@ export function GitHubPanel({ project, leftPanelContent }: { project: Project, l
   const [analyzing, setAnalyzing] = useState(false)
   const [pushing, setPushing] = useState(false)
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
+  const [notifiedCommitSha, setNotifiedCommitSha] = useState<string | null>(null)
 
   // Re-init when project changes
   useEffect(() => {
@@ -88,6 +89,50 @@ export function GitHubPanel({ project, leftPanelContent }: { project: Project, l
   useEffect(() => {
     if (token && parsed) fetchData()
   }, [token, project.id])
+
+  // Poll for new commits
+  useEffect(() => {
+    if (!token || !parsed) return
+    const interval = setInterval(async () => {
+      try {
+        const commitsRes = await apiClient.get(`/github/commits?owner=${parsed.owner}&repo=${parsed.repo}&token=${token}`)
+        const rawCommits = typeof commitsRes.data === 'string' ? JSON.parse(commitsRes.data) : commitsRes.data
+        const latestCommits = Array.isArray(rawCommits) ? rawCommits.slice(0, 1) : []
+        
+        if (latestCommits.length > 0 && commits.length > 0) {
+           const remoteSha = latestCommits[0].sha
+           const localKnownSha = commits[0].sha
+           
+           if (remoteSha !== localKnownSha && remoteSha !== notifiedCommitSha) {
+               setNotifiedCommitSha(remoteSha)
+               
+               import('sweetalert2').then(Swal => {
+                  Swal.default.fire({
+                    title: 'New Commit Detected!',
+                    text: 'A new commit was pushed to GitHub. Would you like to automatically pull and analyze the changes?',
+                    icon: 'info',
+                    showCancelButton: true,
+                    confirmButtonText: 'Pull & Analyze',
+                    cancelButtonText: 'Later',
+                    background: 'rgba(15, 15, 20, 0.95)',
+                    color: '#fff',
+                    confirmButtonColor: '#8b5cf6',
+                    cancelButtonColor: '#3f3f46',
+                    backdrop: `rgba(0,0,0,0.4) blur(4px)`
+                  }).then((result) => {
+                     if (result.isConfirmed) {
+                         handleAutoSyncAndAnalyze()
+                     }
+                  })
+               })
+           }
+        }
+      } catch (e) {
+         // ignore polling errors to avoid console spam
+      }
+    }, 20000)
+    return () => clearInterval(interval)
+  }, [token, parsed, commits, notifiedCommitSha])
 
   async function fetchData() {
     if (!parsed) return
@@ -134,6 +179,34 @@ export function GitHubPanel({ project, leftPanelContent }: { project: Project, l
   }
 
   // ── Server-Side Actions ──────────────────────────────────────────────────
+  async function handleAutoSyncAndAnalyze() {
+    if (!parsed || !token) return
+    setSyncing(true)
+    setActionMessage({ type: 'success', text: 'Pulling latest changes...' })
+    try {
+      await apiClient.post('/git/sync', {
+        repoUrl: project.githubRepoUrl,
+        token: token,
+        projectId: project.id
+      })
+      setActionMessage({ type: 'success', text: 'Repository pulled. Starting AI Analysis...' })
+      
+      setAnalyzing(true)
+      await apiClient.post(`/ai/analyze-workspace/${project.id}?projectName=${encodeURIComponent(project.name)}`)
+      
+      setActionMessage({ type: 'success', text: 'AI Analysis complete! Changes successfully analyzed.' })
+      queryClient.invalidateQueries({ queryKey: ['projectStats', project.id] })
+      fetchData() // refresh commits
+    } catch (e: any) {
+      console.error("Auto Sync/Analyze Error:", e);
+      const backendError = e.response?.data?.userMessage || e.response?.data?.error || (typeof e.response?.data === 'string' ? e.response?.data : null);
+      setActionMessage({ type: 'error', text: backendError || 'Failed during automatic pull and analyze.' })
+    } finally {
+      setSyncing(false)
+      setAnalyzing(false)
+    }
+  }
+
   async function handleSync() {
     if (!parsed || !token) return
     setSyncing(true)
