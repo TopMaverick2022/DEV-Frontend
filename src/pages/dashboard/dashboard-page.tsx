@@ -123,6 +123,7 @@ export function DashboardPage() {
   const [uploadProgress, setUploadProgress] = useState({ loaded: 0, total: 0, percent: 0 })
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const evtSourceRef = useRef<EventSource | null>(null)
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes'
@@ -193,7 +194,7 @@ export function DashboardPage() {
 
   const handleAnalyzeWorkspace = (projId?: number, projName?: string) => {
     const id = projId || selectedProject?.id
-    const name = projName || selectedProject?.name || 'Workspace'
+    const name = projName || selectedProject?.name || 'Project Files'
     
     if (!id) return
 
@@ -214,6 +215,7 @@ export function DashboardPage() {
     setAnalysisState({ active: true, current: 0, total: 0, filename: 'Connecting...', logs: [], isComplete: false })
 
     const evtSource = new EventSource(url)
+    evtSourceRef.current = evtSource
 
     evtSource.onopen = () => {
       setAnalysisState(prev => ({ ...prev, filename: 'Initializing...' }))
@@ -274,6 +276,48 @@ export function DashboardPage() {
         filename: 'Connection failed. Check console for details.'
       }))
     }
+  }
+
+  const handleCancelAnalysis = () => {
+    const id = selectedProject?.id;
+    if (!id) return;
+    
+    Swal.fire({
+      title: 'Cancel Analysis?',
+      text: 'Are you sure you want to stop the AI analysis? Partially processed files will be saved.',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, cancel it',
+      cancelButtonText: 'No, keep analyzing',
+      background: 'rgba(15, 15, 20, 0.95)',
+      color: '#fff',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#3f3f46',
+      backdrop: `rgba(0,0,0,0.4) blur(4px)`
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        if (evtSourceRef.current) {
+          evtSourceRef.current.close();
+          evtSourceRef.current = null;
+        }
+        
+        try {
+          await apiClient.post(`/ai/analyze-workspace/${id}/cancel`);
+        } catch (error) {
+          console.error('Failed to cancel on backend:', error);
+        }
+
+        setAnalysisState({ active: false, current: 0, total: 0, filename: '', logs: [], isComplete: false });
+        Swal.fire({
+          title: 'Cancelled',
+          text: 'Analysis has been stopped.',
+          icon: 'info',
+          background: 'rgba(15, 15, 20, 0.95)',
+          color: '#fff',
+          confirmButtonColor: '#3b82f6',
+        });
+      }
+    });
   }
 
   const { data: projects, isLoading, isError, error } = useQuery({
@@ -491,6 +535,7 @@ export function DashboardPage() {
                   <GitHubPanel 
                     project={selectedProject} 
                     leftPanelContent={<ProjectMetricsPane project={selectedProject} projectStats={projectStats} />}
+                    onAnalyze={() => handleAnalyzeWorkspace()}
                   />
                 ) : (
                   <>
@@ -519,7 +564,7 @@ export function DashboardPage() {
                 <div className="mt-8">
                   <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                      <h3 className="text-lg font-bold text-foreground">Live Server Workspace</h3>
+                      <h3 className="text-lg font-bold text-foreground">Live Server Projects View</h3>
                       <p className="text-sm text-muted-foreground">Browse files currently checked out into the backend AI pipeline.</p>
                     </div>
                     {/* Native Analyze trigger for non-GitHub environments */}
@@ -634,9 +679,17 @@ export function DashboardPage() {
                   Dismiss Log
                 </button>
               ) : (
-                <p className="text-xs text-muted-foreground text-center italic">
-                  Processing batch of files with Gemini AI...
-                </p>
+                <div className="flex flex-col gap-3 mt-4">
+                  <p className="text-xs text-muted-foreground text-center italic">
+                    Processing batch of files with Gemini AI...
+                  </p>
+                  <button
+                    onClick={handleCancelAnalysis}
+                    className="w-full py-2.5 bg-destructive/10 text-destructive border border-destructive/20 rounded-xl text-sm font-bold shadow-lg hover:bg-destructive hover:text-white transition-all active:scale-95"
+                  >
+                    Cancel Analysis
+                  </button>
+                </div>
               )}
             </motion.div>
           </motion.div>

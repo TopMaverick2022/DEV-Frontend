@@ -54,7 +54,7 @@ interface Commit {
 }
 
 // ── Main Component ───────────────────────────────────────────────────────────
-export function GitHubPanel({ project, leftPanelContent }: { project: Project, leftPanelContent?: React.ReactNode }) {
+export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project: Project, leftPanelContent?: React.ReactNode, onAnalyze?: () => void }) {
   const queryClient = useQueryClient()
   const parsed = project.githubRepoUrl ? parseGitHubUrl(project.githubRepoUrl) : null
 
@@ -228,6 +228,10 @@ export function GitHubPanel({ project, leftPanelContent }: { project: Project, l
   }
 
   async function handleAnalyze() {
+    if (onAnalyze) {
+      onAnalyze();
+      return;
+    }
     setAnalyzing(true)
     setActionMessage(null)
     try {
