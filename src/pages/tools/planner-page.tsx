@@ -1,99 +1,436 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { GlassCard } from '@/components/shared/glass-components'
-import { Wand2, Loader2, Sparkles, Copy, CheckCheck } from 'lucide-react'
+import {
+  Wand2, Loader2, Sparkles, ChevronDown,
+  Clock, Zap, Shield, Code2, TestTube2, FileText,
+  Layers, Terminal, CheckCircle2, AlertTriangle,
+  BarChart3, FolderKanban
+} from 'lucide-react'
 import apiClient from '@/lib/api-client'
+import { projectService } from '@/features/projects/project-service'
+import type { Project } from '@/types/project'
+import Swal from 'sweetalert2'
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+interface TaskDto {
+  title: string
+  description: string
+  type: string
+  estimatedHours: number
+  priority: string
+}
+
+interface PlanResult {
+  featureName: string
+  complexity: string
+  totalEstimatedHours: number
+  tasks: TaskDto[]
+  error?: string
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const TYPE_META: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
+  Backend:       { icon: <Terminal className="w-3.5 h-3.5" />,   color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
+  Frontend:      { icon: <Layers className="w-3.5 h-3.5" />,     color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
+  Design:        { icon: <Sparkles className="w-3.5 h-3.5" />,   color: 'text-pink-400',   bg: 'bg-pink-500/10 border-pink-500/20' },
+  Security:      { icon: <Shield className="w-3.5 h-3.5" />,     color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20' },
+  Testing:       { icon: <TestTube2 className="w-3.5 h-3.5" />,  color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20' },
+  Documentation: { icon: <FileText className="w-3.5 h-3.5" />,   color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/20' },
+  DevOps:        { icon: <Zap className="w-3.5 h-3.5" />,        color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20' },
+}
+
+const PRIORITY_META: Record<string, { color: string; dot: string }> = {
+  High:   { color: 'text-red-400 bg-red-500/10 border border-red-500/20',    dot: 'bg-red-400' },
+  Medium: { color: 'text-amber-400 bg-amber-500/10 border border-amber-500/20', dot: 'bg-amber-400' },
+  Low:    { color: 'text-green-400 bg-green-500/10 border border-green-500/20', dot: 'bg-green-400' },
+}
+
+const COMPLEXITY_META: Record<string, { color: string; icon: React.ReactNode }> = {
+  Low:    { color: 'text-green-400',  icon: <CheckCircle2 className="w-4 h-4" /> },
+  Medium: { color: 'text-amber-400',  icon: <AlertTriangle className="w-4 h-4" /> },
+  High:   { color: 'text-red-400',    icon: <AlertTriangle className="w-4 h-4" /> },
+}
+
+function getTypeMeta(type: string) {
+  return TYPE_META[type] ?? { icon: <Code2 className="w-3.5 h-3.5" />, color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20' }
+}
+
+function getPriorityMeta(priority: string) {
+  return PRIORITY_META[priority] ?? { color: 'text-slate-400 bg-slate-500/10', dot: 'bg-slate-400' }
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 export function PlannerPage() {
-  const [feature, setFeature] = useState('')
-  const [projectId, setProjectId] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
-  const [copied, setCopied] = useState(false)
+  const [feature, setFeature]           = useState('')
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false)
+  const [loading, setLoading]           = useState(false)
+  const [result, setResult]             = useState<PlanResult | null>(null)
+  const [implemented, setImplemented]   = useState(false)
+  const navigate = useNavigate()
+
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ['projects'],
+    queryFn: () => projectService.getMyProjects(),
+  })
 
   const handleGenerate = async () => {
     if (!feature.trim()) return
+    if (!selectedProject) {
+      Swal.fire({
+        title: 'Select a Project',
+        text: 'Please select a project to link this plan to.',
+        icon: 'warning',
+        background: 'rgba(15,15,20,0.95)',
+        color: '#fff',
+        confirmButtonColor: '#6366f1',
+        backdrop: 'rgba(0,0,0,0.4) blur(4px)',
+      })
+      return
+    }
+
     setLoading(true)
     setResult(null)
-    try {
-      const response = await apiClient.post('/ai/project-plan', {
-        featureDescription: feature,
-        projectId: projectId ? parseInt(projectId) : null,
+    setImplemented(false)
+
+    // 30-second hard timeout — if the backend is still hanging after this, abort
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30_000)
+
+    const showBusySwal = (title: string, html: string, icon: 'warning' | 'error' = 'warning') =>
+      Swal.fire({
+        title,
+        html,
+        icon,
+        background: 'rgba(15,15,20,0.97)',
+        color: '#fff',
+        confirmButtonColor: icon === 'error' ? '#ef4444' : '#f59e0b',
+        confirmButtonText: icon === 'error' ? 'Understood' : 'OK, I will try again',
+        backdrop: 'rgba(0,0,0,0.5) blur(4px)',
       })
+
+    try {
+      const response = await apiClient.post<PlanResult>('/ai/project-plan', {
+        featureDescription: feature,
+        projectId: selectedProject.id,
+      }, { signal: controller.signal })
+
       setResult(response.data)
+
     } catch (error: any) {
-      setResult({ error: error.response?.data?.message || 'Failed to generate plan. Please try again.' })
+      // AbortController fired — request took > 30 s
+      if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || controller.signal.aborted) {
+        showBusySwal(
+          '⏱ Request Timed Out',
+          `<p style="color:#a1a1aa;font-size:14px;line-height:1.6">
+            The AI took too long to respond (>30 s). Gemini may be under high demand.<br/><br/>
+            <strong style="color:#fff">Please wait a few seconds and try again.</strong>
+          </p>`
+        )
+        return
+      }
+
+      const status = error.response?.status
+      const userMessage = error.response?.data?.userMessage || error.response?.data?.message
+
+      if (status === 503) {
+        showBusySwal(
+          '🚦 Gemini is Busy',
+          `<p style="color:#a1a1aa;font-size:14px;line-height:1.6">
+            The Gemini AI model is currently experiencing <strong style="color:#fff">high demand</strong>.<br/><br/>
+            Please wait <strong style="color:#fff">10–15 seconds</strong> and try again.
+          </p>`
+        )
+      } else if (status === 429) {
+        showBusySwal(
+          '🚫 API Quota Exceeded',
+          `<p style="color:#a1a1aa;font-size:14px;line-height:1.6">
+            Your Gemini API daily limit has been reached.<br/>
+            <strong style="color:#fff">Please try again tomorrow</strong> or upgrade your API plan.
+          </p>`,
+          'error'
+        )
+      } else {
+        setResult({
+          featureName: '', complexity: '', totalEstimatedHours: 0, tasks: [],
+          error: userMessage || 'Failed to generate plan. Please try again.'
+        })
+      }
     } finally {
+      clearTimeout(timeoutId)
       setLoading(false)
     }
   }
 
-  const handleCopy = () => {
-    if (!result) return
-    navigator.clipboard.writeText(JSON.stringify(result, null, 2))
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
+  const handleImplementPlan = async () => {
+    const res = await Swal.fire({
+      title: '✅ Plan Saved to Project!',
+      html: `
+        <p style="color:#a1a1aa;font-size:14px;line-height:1.6">
+          The feature <strong style="color:#fff">"${result?.featureName}"</strong> and all 
+          <strong style="color:#fff">${result?.tasks?.length} tasks</strong> have been saved to 
+          <strong style="color:#fff">"${selectedProject?.name}"</strong>.
+        </p>
+        <p style="color:#a1a1aa;font-size:14px;margin-top:10px">
+          Go to the <strong style="color:#fff">Dashboard</strong> to view your project and track progress.
+        </p>`,
+      icon: 'success',
+      showCancelButton: true,
+      background: 'rgba(15,15,20,0.97)',
+      color: '#fff',
+      confirmButtonColor: '#6366f1',
+      confirmButtonText: '→ Go to Dashboard',
+      cancelButtonText: 'Stay here',
+      cancelButtonColor: '#3f3f46',
+      backdrop: 'rgba(0,0,0,0.5) blur(4px)',
+    })
+    if (res.isConfirmed) {
+      navigate('/dashboard')
+    } else {
+      setImplemented(true)
+    }
   }
 
+  // Group tasks by type
+  const tasksByType = result?.tasks?.reduce<Record<string, TaskDto[]>>((acc, task) => {
+    const t = task.type || 'Other'
+    acc[t] = [...(acc[t] ?? []), task]
+    return acc
+  }, {}) ?? {}
+
+  const complexityMeta = result?.complexity ? COMPLEXITY_META[result.complexity] ?? { color: 'text-slate-400', icon: null } : null
+
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-5xl mx-auto">
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">AI Project Planner</h1>
-        <p className="text-muted-foreground mt-1">Describe a feature and let AI generate a full sprint plan with tasks and dependencies.</p>
+        <div className="flex items-center gap-3 mb-1">
+          <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
+            <FolderKanban className="w-5 h-5 text-primary" />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">AI Project Planner</h1>
+        </div>
+        <p className="text-muted-foreground ml-14">
+          Describe a feature and let Gemini AI generate a full, actionable development plan — instantly saved to your project.
+        </p>
       </div>
 
+      {/* ── Input Form ─────────────────────────────────────────────────── */}
       <GlassCard>
-        <div className="space-y-4">
+        <div className="space-y-5">
+
+          {/* Project Selector */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Feature Description *</label>
+            <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <FolderKanban className="w-3.5 h-3.5 text-primary" />
+             Projects List <span className="text-destructive">*</span>
+            </label>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setProjectDropdownOpen(v => !v)}
+                className="w-full flex items-center justify-between bg-background/50 border border-input rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary hover:bg-background/80 transition-colors"
+              >
+                <span className={selectedProject ? 'text-foreground' : 'text-muted-foreground'}>
+                  {selectedProject
+                    ? <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-primary inline-block" />{selectedProject.name}</span>
+                    : 'Select a project...'}
+                </span>
+                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${projectDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {projectDropdownOpen && (
+                <div className="absolute z-20 w-full mt-1 bg-background border border-input rounded-xl shadow-2xl overflow-hidden">
+                  {projects.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-muted-foreground">No projects found. Create a project first.</div>
+                  ) : (
+                    projects.map(p => (
+                      <button
+                        key={p.id}
+                        onClick={() => { setSelectedProject(p); setProjectDropdownOpen(false) }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-primary/10 transition-colors"
+                      >
+                        <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
+                        <span className="font-medium text-foreground">{p.name}</span>
+                        {p.githubRepoUrl && <span className="ml-auto text-xs text-muted-foreground truncate max-w-[120px]">{p.githubRepoUrl.replace('https://github.com/', '')}</span>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Feature Description */}
+          <div className="space-y-2">
+            <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              Feature Description <span className="text-destructive">*</span>
+            </label>
             <textarea
               value={feature}
               onChange={(e) => setFeature(e.target.value)}
               placeholder="e.g., Build a user authentication system with JWT, OAuth2, and password reset functionality..."
               rows={4}
-              className="w-full bg-background/50 border border-input rounded-lg px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground resize-none"
+              className="w-full bg-background/50 border border-input rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground resize-none transition-colors"
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Project ID (optional)</label>
-            <input
-              type="number"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              placeholder="Link this plan to an existing project ID"
-              className="w-full bg-background/50 border border-input rounded-lg px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
-            />
-          </div>
+
           <button
             onClick={handleGenerate}
-            disabled={loading || !feature.trim()}
-            className="bg-primary text-primary-foreground px-6 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:opacity-90 disabled:opacity-50 transition-opacity"
+            disabled={loading || !feature.trim() || !selectedProject}
+            className="relative overflow-hidden bg-primary text-primary-foreground px-8 py-3 rounded-xl text-sm font-semibold flex items-center gap-2 hover:opacity-90 disabled:opacity-40 transition-all active:scale-95 shadow-lg shadow-primary/20"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            Generate Plan
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+            {loading ? 'Generating Plan...' : 'Generate Plan with Gemini AI'}
           </button>
         </div>
       </GlassCard>
 
-      {result && (
+      {/* ── Loading skeleton ────────────────────────────────────────────── */}
+      {loading && (
         <GlassCard>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Wand2 className="w-5 h-5 text-primary" />
-              <h3 className="font-bold text-foreground">Generated Plan</h3>
+          <div className="space-y-4 animate-pulse">
+            <div className="h-6 w-48 bg-muted rounded-lg" />
+            <div className="flex gap-4">
+              <div className="h-10 w-28 bg-muted rounded-xl" />
+              <div className="h-10 w-28 bg-muted rounded-xl" />
             </div>
-            <button onClick={handleCopy} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-              {copied ? <CheckCheck className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
-              {copied ? 'Copied!' : 'Copy JSON'}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {[1,2,3,4].map(i => <div key={i} className="h-24 bg-muted rounded-xl" />)}
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ── Result: Error ──────────────────────────────────────────────── */}
+      {result?.error && !loading && (
+        <GlassCard>
+          <div className="flex items-start gap-3 text-destructive">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-sm">Generation Failed</p>
+              <p className="text-sm text-muted-foreground mt-1">{result.error}</p>
+            </div>
+          </div>
+        </GlassCard>
+      )}
+
+      {/* ── Result: Plan ───────────────────────────────────────────────── */}
+      {result && !result.error && !loading && (
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+          {/* Summary Banner */}
+          <GlassCard>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle2 className="w-4 h-4 text-green-400" />
+                  <span className="text-xs text-green-400 font-medium uppercase tracking-wide">Plan Generated & Saved</span>
+                </div>
+                <h2 className="text-xl font-bold text-foreground">{result.featureName}</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  Linked to <span className="text-foreground font-medium">{selectedProject?.name}</span>
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                {/* Complexity */}
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-background/60 border border-border">
+                  <BarChart3 className={`w-4 h-4 ${complexityMeta?.color}`} />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Complexity</p>
+                    <p className={`text-sm font-bold ${complexityMeta?.color}`}>{result.complexity}</p>
+                  </div>
+                </div>
+                {/* Total Hours */}
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-background/60 border border-border">
+                  <Clock className="w-4 h-4 text-blue-400" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Total Estimated</p>
+                    <p className="text-sm font-bold text-foreground">{result.totalEstimatedHours} hrs</p>
+                  </div>
+                </div>
+                {/* Task Count */}
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-background/60 border border-border">
+                  <FolderKanban className="w-4 h-4 text-violet-400" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Tasks</p>
+                    <p className="text-sm font-bold text-foreground">{result.tasks.length}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </GlassCard>
+
+          {/* Tasks By Category */}
+          {Object.entries(tasksByType).map(([type, tasks]) => {
+            const meta = getTypeMeta(type)
+            return (
+              <div key={type}>
+                {/* Category Header */}
+                <div className="flex items-center gap-2 mb-3 px-1">
+                  <div className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full border ${meta.color} ${meta.bg}`}>
+                    {meta.icon}
+                    {type}
+                  </div>
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-xs text-muted-foreground">{tasks.length} task{tasks.length > 1 ? 's' : ''} · {tasks.reduce((s, t) => s + t.estimatedHours, 0)}h</span>
+                </div>
+
+                {/* Task Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {tasks.map((task, i) => {
+                    const pMeta = getPriorityMeta(task.priority)
+                    return (
+                      <div
+                        key={i}
+                        className="group relative p-4 rounded-xl bg-background/40 border border-border hover:border-primary/30 hover:bg-background/60 transition-all"
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <h4 className="text-sm font-semibold text-foreground leading-tight">{task.title}</h4>
+                          <span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${pMeta.color}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${pMeta.dot}`} />
+                            {task.priority}
+                          </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed mb-3">{task.description}</p>
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-3 h-3 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">{task.estimatedHours}h estimated</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })}
+
+          {/* Implement Plan Button */}
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              onClick={() => { setResult(null); setImplemented(false) }}
+              className="px-6 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:border-foreground/20 transition-all"
+            >
+              Generate Another
+            </button>
+            <button
+              onClick={handleImplementPlan}
+              disabled={implemented}
+              className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-primary/20 disabled:opacity-60"
+            >
+              {implemented
+                ? <><CheckCircle2 className="w-4 h-4" /> Plan Implemented</>
+                : <><Zap className="w-4 h-4" /> View in Project Board</>}
             </button>
           </div>
-          {result.error ? (
-            <p className="text-destructive text-sm">{result.error}</p>
-          ) : (
-            <pre className="bg-background/50 rounded-lg p-4 text-xs text-foreground overflow-auto max-h-[500px]">
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          )}
-        </GlassCard>
+        </div>
       )}
     </div>
   )
