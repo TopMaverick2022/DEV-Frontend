@@ -159,8 +159,6 @@ export function DashboardPage() {
       if (data?.projectId) {
         handleAnalyzeWorkspace(data.projectId, data.projectName || file.name)
       }
-
-      setTimeout(() => setUploadState('idle'), 3000)
     } catch (error: any) {
       console.error('Upload failed:', error)
       setUploadState('idle')
@@ -542,19 +540,6 @@ export function DashboardPage() {
                     <div className="lg:col-span-2">
                       <ProjectMetricsPane project={selectedProject} projectStats={projectStats} />
                     </div>
-                    <div>
-                      <GlassCard>
-                        <h3 className="text-lg font-bold mb-6 text-foreground">AI Insights</h3>
-                        <div className="space-y-4">
-                          <InsightItem icon={<ShieldCheck className="text-green-500" />} title="Security Patch Ready" desc="Update lodash to v4.17.21 to fix CVE-2020-8203." />
-                          <InsightItem icon={<Zap className="text-amber-500" />} title="Optimization Gap" desc="Component 'Header.tsx' re-renders excessively. Suggested useMemo hook." />
-                          <InsightItem icon={<Code className="text-blue-500" />} title="Style Inconsistency" desc="5 files use mixed indentation. Suggested 'prettier --write'." />
-                        </div>
-                        <button className="w-full mt-8 py-3 rounded-xl bg-accent hover:bg-accent/80 transition-colors text-sm font-medium text-foreground">
-                          View All Insights
-                        </button>
-                      </GlassCard>
-                    </div>
                   </>
                 )}
               </div>
@@ -698,7 +683,7 @@ export function DashboardPage() {
 
       {/* Upload Progress Overlay */}
       <AnimatePresence>
-        {uploadState === 'uploading' && (
+        {(uploadState === 'uploading' || uploadState === 'done') && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -711,29 +696,51 @@ export function DashboardPage() {
               exit={{ scale: 0.9, opacity: 0 }}
               className="w-full max-w-md glass border border-border rounded-2xl p-6 space-y-4"
             >
-              <div className="flex items-center justify-between">
-                <h3 className="font-bold text-lg">Uploading Project ZIP</h3>
-                <Upload className="w-5 h-5 text-primary animate-pulse" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">
-                    {formatBytes(uploadProgress.loaded)} / {formatBytes(uploadProgress.total)}
-                  </span>
-                  <span className="font-mono font-bold text-primary">{uploadProgress.percent}%</span>
-                </div>
-                <div className="w-full bg-muted/30 rounded-full h-3 overflow-hidden">
-                  <motion.div
-                    className="h-full bg-primary rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${uploadProgress.percent}%` }}
-                    transition={{ duration: 0.2 }}
-                  />
-                </div>
-              </div>
-              <p className="text-xs text-muted-foreground italic">
-                Please do not close this window until the upload is complete.
-              </p>
+              {uploadState === 'uploading' ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-lg">Uploading Project ZIP</h3>
+                    <Upload className="w-5 h-5 text-primary animate-pulse" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">
+                        {formatBytes(uploadProgress.loaded)} / {formatBytes(uploadProgress.total)}
+                      </span>
+                      <span className="font-mono font-bold text-primary">{uploadProgress.percent}%</span>
+                    </div>
+                    <div className="w-full bg-muted/30 rounded-full h-3 overflow-hidden">
+                      <motion.div
+                        className="h-full bg-primary rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${uploadProgress.percent}%` }}
+                        transition={{ duration: 0.2 }}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground italic">
+                    Please do not close this window until the upload is complete.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-bold text-lg text-green-500">Upload Successful!</h3>
+                    <CheckCircle className="w-5 h-5 text-green-500 animate-bounce" />
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">
+                      Your project has been uploaded successfully. Processing and analysis will start shortly.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setUploadState('idle')}
+                    className="w-full py-2.5 bg-primary text-primary-foreground rounded-xl text-sm font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-all active:scale-95 mt-4"
+                  >
+                    Close
+                  </button>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}
