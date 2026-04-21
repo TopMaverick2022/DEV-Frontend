@@ -226,17 +226,41 @@ export function DashboardPage() {
         setAnalysisState(prev => ({ ...prev, filename: 'Analysis Complete!', isComplete: true }))
         queryClient.invalidateQueries({ queryKey: ['projectStats', id] })
         queryClient.invalidateQueries({ queryKey: ['geminiQuota'] })
+      } else if (raw.startsWith('QUOTA_EXCEEDED:')) {
+        // Quota/rate-limit error — close stream and show immediate SweetAlert
+        evtSource.close()
+        const msg = raw.replace('QUOTA_EXCEEDED:', '').trim()
+        setAnalysisState({ active: false, current: 0, total: 0, filename: '', logs: [], isComplete: false })
+        Swal.fire({
+          title: 'API Quota Exceeded',
+          text: msg || 'Daily AI processing limit reached. Please try again tomorrow.',
+          icon: 'warning',
+          background: 'rgba(15, 15, 20, 0.95)',
+          color: '#fff',
+          confirmButtonColor: '#3b82f6',
+          backdrop: `rgba(0,0,0,0.4) blur(4px)`
+        })
       } else if (raw.startsWith('ERROR:')) {
         evtSource.close()
-        const msg = raw.replace('ERROR:', '')
+        const msg = raw.replace('ERROR:', '').trim()
         setAnalysisState(prev => ({ ...prev, active: false, filename: `Error: ${msg}` }))
         console.error('Analysis error:', msg)
 
-        // SweetAlert for quota exhaustion in SSE
-        if (msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429')) {
+        // SweetAlert for quota exhaustion in SSE (legacy ERROR: path)
+        if (msg.toLowerCase().includes('quota') || msg.toLowerCase().includes('429') || msg.toLowerCase().includes('rate limit')) {
           Swal.fire({
-            title: 'Gemini Quota Exceeded',
-            text: 'Daily limit reached (1,500 requests). Please try again tomorrow.',
+            title: 'API Quota Exceeded',
+            text: 'Daily limit reached. Please try again tomorrow.',
+            icon: 'error',
+            background: 'rgba(15, 15, 20, 0.95)',
+            color: '#fff',
+            confirmButtonColor: '#3b82f6',
+            backdrop: `rgba(0,0,0,0.4) blur(4px)`
+          })
+        } else {
+          Swal.fire({
+            title: 'Analysis Error',
+            text: msg || 'An error occurred during analysis. Please try again.',
             icon: 'error',
             background: 'rgba(15, 15, 20, 0.95)',
             color: '#fff',

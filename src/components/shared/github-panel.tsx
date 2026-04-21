@@ -190,20 +190,32 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
         projectId: project.id
       })
       setActionMessage({ type: 'success', text: 'Repository pulled. Starting AI Analysis...' })
-      
-      setAnalyzing(true)
-      await apiClient.post(`/ai/analyze-workspace/${project.id}?projectName=${encodeURIComponent(project.name)}`)
-      
-      setActionMessage({ type: 'success', text: 'AI Analysis complete! Changes successfully analyzed.' })
+      fetchData() // refresh commits list
       queryClient.invalidateQueries({ queryKey: ['projectStats', project.id] })
-      fetchData() // refresh commits
+      
+      // Delegate to the SSE-based onAnalyze callback so the progress overlay is shown
+      if (onAnalyze) {
+        onAnalyze()
+      } else {
+        // Fallback: should not normally happen if the panel is used from DashboardPage
+        import('sweetalert2').then(Swal => {
+          Swal.default.fire({
+            title: 'Pull Successful',
+            text: 'Repository pulled. Please click "Analyze" to start AI analysis.',
+            icon: 'success',
+            background: 'rgba(15, 15, 20, 0.95)',
+            color: '#fff',
+            confirmButtonColor: '#8b5cf6',
+            backdrop: `rgba(0,0,0,0.4) blur(4px)`
+          })
+        })
+      }
     } catch (e: any) {
       console.error("Auto Sync/Analyze Error:", e);
       const backendError = e.response?.data?.userMessage || e.response?.data?.error || (typeof e.response?.data === 'string' ? e.response?.data : null);
-      setActionMessage({ type: 'error', text: backendError || 'Failed during automatic pull and analyze.' })
+      setActionMessage({ type: 'error', text: backendError || 'Failed to pull repository. Please try again.' })
     } finally {
       setSyncing(false)
-      setAnalyzing(false)
     }
   }
 
