@@ -188,7 +188,8 @@ export function DashboardPage() {
     filename: string
     logs: string[]
     isComplete: boolean
-  }>({ active: false, current: 0, total: 0, filename: '', logs: [], isComplete: false })
+    projectId: number | null
+  }>({ active: false, current: 0, total: 0, filename: '', logs: [], isComplete: false, projectId: null })
 
   const handleAnalyzeWorkspace = (projId?: number, projName?: string) => {
     const id = projId || selectedProject?.id
@@ -209,8 +210,8 @@ export function DashboardPage() {
 
     const baseUrl = 'http://localhost:8080/api'
     const url = `${baseUrl}/ai/analyze-workspace/${id}/stream?projectName=${encodeURIComponent(name)}&token=${encodeURIComponent(token)}`
-
-    setAnalysisState({ active: true, current: 0, total: 0, filename: 'Connecting...', logs: [], isComplete: false })
+    
+    setAnalysisState({ active: true, current: 0, total: 0, filename: 'Connecting...', logs: [], isComplete: false, projectId: id })
 
     const evtSource = new EventSource(url)
     evtSourceRef.current = evtSource
@@ -301,7 +302,7 @@ export function DashboardPage() {
   }
 
   const handleCancelAnalysis = () => {
-    const id = selectedProject?.id;
+    const id = analysisState.projectId;
     if (!id) return;
     
     Swal.fire({
@@ -329,7 +330,7 @@ export function DashboardPage() {
           console.error('Failed to cancel on backend:', error);
         }
 
-        setAnalysisState({ active: false, current: 0, total: 0, filename: '', logs: [], isComplete: false });
+        setAnalysisState({ active: false, current: 0, total: 0, filename: '', logs: [], isComplete: false, projectId: null });
         Swal.fire({
           title: 'Cancelled',
           text: 'Analysis has been stopped.',

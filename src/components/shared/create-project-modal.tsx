@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
-import { Plus, Github, Loader2, X, CheckCircle2, AlertCircle } from 'lucide-react'
+import { Plus, Github, Loader2, X, CheckCircle2, AlertCircle, Key, Eye, EyeOff } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
 
@@ -42,12 +42,16 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   const [description, setDescription] = useState('')
   const [githubRepoUrl, setGithubRepoUrl] = useState('')
 
+  // GitHub PAT token — pre-fill from localStorage so returning users don't have to re-enter
+  const [token, setToken] = useState(() => localStorage.getItem(GLOBAL_TOKEN_KEY) ?? '')
+  const [showToken, setShowToken] = useState(false)
+
   // GitHub auto-fetch state
   const [repoFetchState, setRepoFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [repoFetchMessage, setRepoFetchMessage] = useState('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Determine if user entered a GitHub URL — if yes, name becomes optional (pre-filled from repo)
+  // Determine if user entered a GitHub URL
   const hasGithubUrl = githubRepoUrl.trim().length > 0
   const parsed = hasGithubUrl ? parseGitHubUrl(githubRepoUrl.trim()) : null
 
@@ -70,8 +74,8 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
     setRepoFetchMessage('Fetching repo info…')
 
     debounceRef.current = setTimeout(async () => {
-      const token = localStorage.getItem(GLOBAL_TOKEN_KEY) ?? ''
-      const tokenParam = token ? `&token=${encodeURIComponent(token)}` : ''
+      const storedToken = token.trim()
+      const tokenParam = storedToken ? `&token=${encodeURIComponent(storedToken)}` : ''
       try {
         const res = await apiClient.get<GitHubRepoMeta>(
           `/github/repo?owner=${parsed.owner}&repo=${parsed.repo}${tokenParam}`
@@ -82,31 +86,44 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
         if (!description || description === '') setDescription(meta.description ?? '')
         setRepoFetchState('success')
         setRepoFetchMessage(`Repo found: ${meta.full_name}`)
-      } catch {
-        setRepoFetchState('error')
-        setRepoFetchMessage('Could not fetch repo. Check URL or ensure token has repo scope.')
+      } catch (err: any) {
+        const status = err?.response?.status
+        if (status === 401 || status === 403) {
+          setRepoFetchState('error')
+          setRepoFetchMessage('Access denied — enter a valid GitHub PAT with repo scope below.')
+        } else if (status === 404) {
+          setRepoFetchState('error')
+          setRepoFetchMessage('Repository not found. Check the URL and token permissions.')
+        } else {
+          setRepoFetchState('error')
+          setRepoFetchMessage('Could not fetch repo. Check URL or ensure token has repo scope.')
+        }
       }
     }, 600)
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [githubRepoUrl])
+  }, [githubRepoUrl, token])
 
   const createMutation = useMutation({
     mutationFn: createProjectApi,
     onSuccess: (createdProject) => {
+      // Persist token so GitHub Panel and future modals don't need to ask again
+      if (token.trim()) {
+        localStorage.setItem(GLOBAL_TOKEN_KEY, token.trim())
+      }
+
       queryClient.invalidateQueries({ queryKey: ['projects'] })
 
       // Auto-clone if GitHub URL was provided and token is stored
       if (githubRepoUrl.trim() && parsed) {
-        const token = localStorage.getItem(GLOBAL_TOKEN_KEY) ?? ''
-        if (token && createdProject?.id) {
-          // Fire-and-forget — clone happens in background; commit graph will populate automatically
+        const savedToken = token.trim()
+        if (savedToken && createdProject?.id) {
+          // Fire-and-forget — clone happens in background
           apiClient.post('/git/sync', {
             repoUrl: githubRepoUrl.trim(),
-            token,
+            token: savedToken,
             projectId: createdProject.id
           }).then(() => {
-            // Invalidate commit activity query after clone completes
             queryClient.invalidateQueries({ queryKey: ['commitActivity', createdProject.id] })
           }).catch(() => {
             // Silently ignore — user can manually click Clone/Pull in the GitHub panel
@@ -119,8 +136,10 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   })
 
   const isNameRequired = !hasGithubUrl
+  // Token is mandatory when a GitHub repo URL is entered (needed for clone + avoids rate limits)
+  const isTokenRequired = hasGithubUrl
   const canSubmit = hasGithubUrl
-    ? (githubRepoUrl.trim().length > 0) // name will be auto-filled or optionally provided
+    ? (githubRepoUrl.trim().length > 0 && token.trim().length > 0)
     : name.trim().length > 0
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -188,6 +207,47 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                 </div>
               )}
             </div>
+
+            {/* GitHub PAT Token — appears and becomes mandatory as soon as a repo URL is entered */}
+            {hasGithubUrl && (
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <Key className="w-4 h-4" />
+                  GitHub Personal Access Token
+                  {isTokenRequired && <span className="text-destructive ml-0.5">*</span>}
+                  <span className="ml-auto text-xs text-muted-foreground font-normal">Required for cloning</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showToken ? 'text' : 'password'}
+                    placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                    required={isTokenRequired}
+                    className="w-full bg-muted dark:bg-background/50 border border-input rounded-lg pl-4 pr-10 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    tabIndex={-1}
+                    aria-label={showToken ? 'Hide token' : 'Show token'}
+                  >
+                    {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {token && (
+                  <div className="flex items-center gap-1.5 text-xs text-green-500 mt-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Token loaded from saved session
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Needs <code className="bg-muted px-1 rounded">repo</code> scope.
+                  {' '}Stored locally in your browser and reused across projects.
+                </p>
+              </div>
+            )}
 
             {/* Project Name */}
             <div className="space-y-1">
