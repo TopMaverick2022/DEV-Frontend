@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { GlassCard } from '@/components/shared/glass-components'
 import {
-  Wand2, Loader2, Sparkles, ChevronDown,
+  Wand2, Loader2, Sparkles, ChevronDown, ChevronRight,
   Clock, Zap, Shield, Code2, TestTube2, FileText,
   Layers, Terminal, CheckCircle2, AlertTriangle,
-  BarChart3, FolderKanban
+  BarChart3, FolderKanban, BookOpen
 } from 'lucide-react'
 import apiClient from '@/lib/api-client'
 import { projectService } from '@/features/projects/project-service'
@@ -29,6 +29,22 @@ interface PlanResult {
   totalEstimatedHours: number
   tasks: TaskDto[]
   error?: string
+}
+
+interface SavedFeaturePlan {
+  id: number
+  name: string
+  complexity: string
+  totalEstimatedHours: number
+  tasks: {
+    id: number
+    title: string
+    description: string
+    type: string
+    estimatedHours: number
+    priority: string
+    status: string
+  }[]
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -65,6 +81,151 @@ function getPriorityMeta(priority: string) {
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
+// ── Saved Plans Section ───────────────────────────────────────────────────────
+
+function SavedPlansSection({ projectId }: { projectId: number }) {
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+
+  const { data: plans, isLoading } = useQuery<SavedFeaturePlan[]>({
+    queryKey: ['projectPlans', projectId],
+    queryFn: async () => {
+      const { data } = await apiClient.get(`/features/project/${projectId}`)
+      return data
+    },
+    enabled: !!projectId,
+  })
+
+  if (isLoading) {
+    return (
+      <GlassCard>
+        <div className="flex items-center gap-3 text-muted-foreground animate-pulse">
+          <Loader2 className="w-4 h-4 animate-spin text-primary" />
+          <span className="text-sm">Loading saved plans...</span>
+        </div>
+      </GlassCard>
+    )
+  }
+
+  if (!plans || plans.length === 0) {
+    return (
+      <GlassCard>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-muted/30">
+            <BookOpen className="w-4 h-4 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-foreground">No saved plans yet</p>
+            <p className="text-xs text-muted-foreground mt-0.5">Generate a plan above — it will appear here automatically.</p>
+          </div>
+        </div>
+      </GlassCard>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {plans.map((feature) => {
+        const isOpen = expandedId === feature.id
+        const complexityMeta = COMPLEXITY_META[feature.complexity] ?? { color: 'text-slate-400', icon: null }
+        const tasksByType = feature.tasks.reduce<Record<string, typeof feature.tasks>>((acc, t) => {
+          const key = t.type || 'Other'
+          acc[key] = [...(acc[key] ?? []), t]
+          return acc
+        }, {})
+
+        return (
+          <div
+            key={feature.id}
+            className="rounded-xl border border-border/60 bg-background/30 overflow-hidden"
+          >
+            {/* Feature header */}
+            <button
+              onClick={() => setExpandedId(isOpen ? null : feature.id)}
+              className="w-full flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-white/5 transition-colors text-left"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+                  <FolderKanban className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{feature.name}</p>
+                  <p className="text-xs text-muted-foreground">{feature.tasks.length} tasks</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Complexity */}
+                <span className={`hidden sm:flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-background/60 border border-border ${complexityMeta.color}`}>
+                  <BarChart3 className="w-2.5 h-2.5" /> {feature.complexity}
+                </span>
+                {/* Hours */}
+                <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400">
+                  <Clock className="w-2.5 h-2.5" /> {feature.totalEstimatedHours}h
+                </span>
+                <ChevronRight className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
+              </div>
+            </button>
+
+            {/* Expanded task list */}
+            {isOpen && (
+              <div className="px-4 pb-4 pt-3 space-y-4 border-t border-border/40 animate-in fade-in slide-in-from-top-2 duration-200">
+                {Object.entries(tasksByType).map(([type, tasks]) => {
+                  const meta = getTypeMeta(type)
+                  return (
+                    <div key={type}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${meta.color} ${meta.bg}`}>
+                          {meta.icon} {type}
+                        </div>
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-[10px] text-muted-foreground">
+                          {tasks.length} task{tasks.length > 1 ? 's' : ''} · {tasks.reduce((s, t) => s + (t.estimatedHours || 0), 0)}h
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {tasks.map((task) => {
+                          const pMeta = getPriorityMeta(task.priority)
+                          return (
+                            <div
+                              key={task.id}
+                              className="p-3 rounded-xl bg-background/40 border border-border hover:border-primary/30 hover:bg-background/60 transition-all"
+                            >
+                              <div className="flex items-start justify-between gap-2 mb-1.5">
+                                <h4 className="text-xs font-semibold text-foreground leading-tight">{task.title}</h4>
+                                <span className={`flex-shrink-0 text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 ${pMeta.color}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${pMeta.dot}`} />
+                                  {task.priority}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed mb-2">{task.description}</p>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="w-2.5 h-2.5 text-muted-foreground" />
+                                  <span className="text-[10px] text-muted-foreground">{task.estimatedHours}h</span>
+                                </div>
+                                {task.status && (
+                                  <span className="text-[9px] font-medium text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded-full">
+                                    {task.status}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export function PlannerPage() {
   const [feature, setFeature]           = useState('')
   const [selectedProject, setSelectedProject] = useState<Project | null>(null)
@@ -73,6 +234,7 @@ export function PlannerPage() {
   const [result, setResult]             = useState<PlanResult | null>(null)
   const [implemented, setImplemented]   = useState(false)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['projects'],
@@ -121,6 +283,8 @@ export function PlannerPage() {
       }, { signal: controller.signal })
 
       setResult(response.data)
+      // Refresh saved plans list so the new plan appears immediately
+      queryClient.invalidateQueries({ queryKey: ['projectPlans', selectedProject?.id] })
 
     } catch (error: any) {
       // AbortController fired — request took > 30 s
@@ -430,6 +594,25 @@ export function PlannerPage() {
                 : <><Zap className="w-4 h-4" /> View in Project Board</>}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── Saved Plans ────────────────────────────────────────────────────── */}
+      {selectedProject && (
+        <div className="space-y-4 animate-in fade-in duration-500">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-primary/10 border border-primary/20">
+              <BookOpen className="w-4 h-4 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-foreground">Saved Plans</h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                All AI-generated plans linked to{' '}
+                <span className="text-foreground font-medium">{selectedProject.name}</span>
+              </p>
+            </div>
+          </div>
+          <SavedPlansSection projectId={selectedProject.id} />
         </div>
       )}
     </div>

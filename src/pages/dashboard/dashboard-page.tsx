@@ -23,7 +23,18 @@ import {
   FolderOpen,
   Bug,
   TrendingDown,
-  X
+  X,
+  FolderKanban,
+  ChevronRight,
+  Terminal,
+  Layers,
+  Sparkles,
+  Shield,
+  TestTube2,
+  FileText,
+  BarChart3,
+  CheckCircle2,
+  AlertTriangle
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -812,11 +823,226 @@ function InsightItem({ icon, title, desc }: any) {
 }
 
 
+// ── Task type helpers (mirrors planner-page but local to avoid import) ────────
+const TASK_TYPE_META: Record<string, { icon: React.ReactNode; color: string; bg: string }> = {
+  Backend:       { icon: <Terminal className="w-3 h-3" />,   color: 'text-blue-400',   bg: 'bg-blue-500/10 border-blue-500/20' },
+  Frontend:      { icon: <Layers className="w-3 h-3" />,     color: 'text-violet-400', bg: 'bg-violet-500/10 border-violet-500/20' },
+  Design:        { icon: <Sparkles className="w-3 h-3" />,   color: 'text-pink-400',   bg: 'bg-pink-500/10 border-pink-500/20' },
+  Security:      { icon: <Shield className="w-3 h-3" />,     color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/20' },
+  Testing:       { icon: <TestTube2 className="w-3 h-3" />,  color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20' },
+  Documentation: { icon: <FileText className="w-3 h-3" />,   color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/20' },
+  DevOps:        { icon: <Zap className="w-3 h-3" />,        color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20' },
+}
+
+const TASK_PRIORITY_META: Record<string, { color: string; dot: string }> = {
+  High:   { color: 'text-red-400 bg-red-500/10 border border-red-500/20',       dot: 'bg-red-400' },
+  Medium: { color: 'text-amber-400 bg-amber-500/10 border border-amber-500/20', dot: 'bg-amber-400' },
+  Low:    { color: 'text-green-400 bg-green-500/10 border border-green-500/20', dot: 'bg-green-400' },
+}
+
+const COMPLEXITY_BADGE: Record<string, string> = {
+  Low:    'text-green-400 bg-green-500/10 border-green-500/20',
+  Medium: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
+  High:   'text-red-400 bg-red-500/10 border-red-500/20',
+}
+
+function getTaskTypeMeta(type: string) {
+  return TASK_TYPE_META[type] ?? { icon: <Code className="w-3 h-3" />, color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20' }
+}
+
+function getTaskPriorityMeta(priority: string) {
+  return TASK_PRIORITY_META[priority] ?? { color: 'text-slate-400 bg-slate-500/10', dot: 'bg-slate-400' }
+}
+
+// ── Project Plans Tab ─────────────────────────────────────────────────────────
+interface FeaturePlanDto {
+  id: number
+  name: string
+  complexity: string
+  totalEstimatedHours: number
+  tasks: { id: number; title: string; description: string; type: string; estimatedHours: number; priority: string; status: string }[]
+}
+
+function ProjectPlansTab({ project }: { project: Project | null }) {
+  const [expandedId, setExpandedId] = useState<number | null>(null)
+
+  const { data: features, isLoading, isError } = useQuery<FeaturePlanDto[]>({
+    queryKey: ['projectPlans', project?.id],
+    queryFn: async () => {
+      if (!project?.id) return []
+      const { data } = await apiClient.get(`/features/project/${project.id}`)
+      return data
+    },
+    enabled: !!project?.id,
+  })
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 gap-3 text-muted-foreground">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+        <span className="text-sm">Loading plans...</span>
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 gap-2 text-destructive">
+        <AlertTriangle className="w-6 h-6" />
+        <span className="text-sm">Failed to load project plans.</span>
+      </div>
+    )
+  }
+
+  if (!features || features.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-48 gap-3 text-muted-foreground border-2 border-dashed border-border/40 rounded-2xl">
+        <FolderKanban className="w-8 h-8 opacity-40" />
+        <div className="text-center">
+          <p className="text-sm font-medium">No plans generated yet</p>
+          <p className="text-xs mt-1">Use the AI Planner to generate a feature plan for this project.</p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3 overflow-y-auto max-h-[420px] pr-1 custom-scrollbar">
+      {features.map((feature) => {
+        const isOpen = expandedId === feature.id
+        const complexityClass = COMPLEXITY_BADGE[feature.complexity] ?? 'text-slate-400 bg-slate-500/10 border-slate-500/20'
+        const tasksByType = feature.tasks.reduce<Record<string, typeof feature.tasks>>((acc, t) => {
+          const key = t.type || 'Other'
+          acc[key] = [...(acc[key] ?? []), t]
+          return acc
+        }, {})
+
+        return (
+          <div
+            key={feature.id}
+            className="rounded-xl border border-border/60 bg-background/30 overflow-hidden transition-all"
+          >
+            {/* Feature Header — click to expand/collapse */}
+            <button
+              onClick={() => setExpandedId(isOpen ? null : feature.id)}
+              className="w-full flex items-center justify-between gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left"
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20 shrink-0">
+                  <FolderKanban className="w-3.5 h-3.5 text-primary" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-foreground truncate">{feature.name}</p>
+                  <p className="text-xs text-muted-foreground">{feature.tasks.length} tasks</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Complexity badge */}
+                <span className={`hidden sm:flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${complexityClass}`}>
+                  <BarChart3 className="w-2.5 h-2.5" />
+                  {feature.complexity}
+                </span>
+                {/* Hours badge */}
+                <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-500/20 bg-blue-500/10 text-blue-400">
+                  <Clock className="w-2.5 h-2.5" />
+                  {feature.totalEstimatedHours}h
+                </span>
+                <ChevronRight
+                  className={`w-4 h-4 text-muted-foreground transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
+                />
+              </div>
+            </button>
+
+            {/* Task list — shown when expanded */}
+            {isOpen && (
+              <div className="px-4 pb-4 space-y-4 border-t border-border/40 pt-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                {Object.entries(tasksByType).map(([type, tasks]) => {
+                  const meta = getTaskTypeMeta(type)
+                  return (
+                    <div key={type}>
+                      {/* Type header */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border ${meta.color} ${meta.bg}`}>
+                          {meta.icon} {type}
+                        </span>
+                        <div className="flex-1 h-px bg-border/50" />
+                        <span className="text-[10px] text-muted-foreground">
+                          {tasks.reduce((s, t) => s + (t.estimatedHours || 0), 0)}h
+                        </span>
+                      </div>
+                      {/* Task cards */}
+                      <div className="space-y-2">
+                        {tasks.map((task) => {
+                          const pMeta = getTaskPriorityMeta(task.priority)
+                          return (
+                            <div
+                              key={task.id}
+                              className="flex items-start justify-between gap-3 p-3 rounded-lg bg-background/50 border border-border/50 hover:border-primary/20 hover:bg-background/70 transition-all"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-foreground leading-tight">{task.title}</p>
+                                <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2 leading-relaxed">{task.description}</p>
+                              </div>
+                              <div className="flex flex-col items-end gap-1.5 shrink-0">
+                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full flex items-center gap-1 ${pMeta.color}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${pMeta.dot}`} />
+                                  {task.priority}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                                  <Clock className="w-2.5 h-2.5" />{task.estimatedHours}h
+                                </span>
+                                {task.status && (
+                                  <span className="text-[9px] font-medium text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded-full">
+                                    {task.status}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 function ProjectMetricsPane({ project, projectStats }: { project: Project | null, projectStats: any }) {
-  const [activeTab, setActiveTab] = useState<'activity' | 'health'>('activity')
+  const [activeTab, setActiveTab] = useState<'activity' | 'health' | 'plans'>('activity')
   
   if (!project?.githubRepoUrl) {
-    return <ProjectHealthChart projectStats={projectStats} inPane={false} />
+    // Non-GitHub projects: show plans and health tabs side by side
+    return (
+      <GlassCard className="flex flex-col h-full p-0 overflow-hidden">
+        <div className="flex border-b border-border/50 bg-background/20">
+          <button
+            onClick={() => setActiveTab('health')}
+            className={`flex-1 py-3 text-sm font-semibold transition-colors ${activeTab === 'health' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
+          >
+            Security & Health
+          </button>
+          <button
+            onClick={() => setActiveTab('plans')}
+            className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 ${activeTab === 'plans' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
+          >
+            <FolderKanban className="w-3.5 h-3.5" /> Project Plans
+          </button>
+        </div>
+        <div className="flex-1 p-6 overflow-hidden">
+          {activeTab === 'health' ? (
+            <ProjectHealthChart projectStats={projectStats} inPane={true} />
+          ) : (
+            <ProjectPlansTab project={project} />
+          )}
+        </div>
+      </GlassCard>
+    )
   }
   
   return (
@@ -834,12 +1060,20 @@ function ProjectMetricsPane({ project, projectStats }: { project: Project | null
         >
           Security & Health
         </button>
+        <button
+          onClick={() => setActiveTab('plans')}
+          className={`flex-1 py-3 text-sm font-semibold transition-colors flex items-center justify-center gap-1.5 ${activeTab === 'plans' ? 'text-primary border-b-2 border-primary' : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}
+        >
+          <FolderKanban className="w-3.5 h-3.5" /> Plans
+        </button>
       </div>
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 overflow-hidden">
         {activeTab === 'activity' ? (
           <CommitActivityChart project={project} inPane={true} />
-        ) : (
+        ) : activeTab === 'health' ? (
           <ProjectHealthChart projectStats={projectStats} inPane={true} />
+        ) : (
+          <ProjectPlansTab project={project} />
         )}
       </div>
     </GlassCard>
