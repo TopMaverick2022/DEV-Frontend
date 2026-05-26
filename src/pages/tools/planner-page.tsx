@@ -6,7 +6,8 @@ import {
   Wand2, Loader2, Sparkles, ChevronDown, ChevronRight,
   Clock, Zap, Shield, Code2, TestTube2, FileText,
   Layers, Terminal, CheckCircle2, AlertTriangle,
-  BarChart3, FolderKanban, BookOpen
+  BarChart3, FolderKanban, BookOpen, Database, ArrowRight,
+  X, Download
 } from 'lucide-react'
 import apiClient from '@/lib/api-client'
 import { projectService } from '@/features/projects/project-service'
@@ -24,7 +25,9 @@ interface TaskDto {
 }
 
 interface PlanResult {
-  featureName: string
+  featureId: number
+  featureName?: string
+  name?: string
   complexity: string
   totalEstimatedHours: number
   tasks: TaskDto[]
@@ -33,7 +36,8 @@ interface PlanResult {
 
 interface SavedFeaturePlan {
   id: number
-  name: string
+  featureName?: string
+  name?: string
   complexity: string
   totalEstimatedHours: number
   tasks: {
@@ -57,6 +61,8 @@ const TYPE_META: Record<string, { icon: React.ReactNode; color: string; bg: stri
   Testing:       { icon: <TestTube2 className="w-3.5 h-3.5" />,  color: 'text-green-400',  bg: 'bg-green-500/10 border-green-500/20' },
   Documentation: { icon: <FileText className="w-3.5 h-3.5" />,   color: 'text-amber-400',  bg: 'bg-amber-500/10 border-amber-500/20' },
   DevOps:        { icon: <Zap className="w-3.5 h-3.5" />,        color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20' },
+  Architecture:  { icon: <Layers className="w-3.5 h-3.5" />,     color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/20' },
+  Database:      { icon: <Database className="w-3.5 h-3.5" />,   color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
 }
 
 const PRIORITY_META: Record<string, { color: string; dot: string }> = {
@@ -79,12 +85,41 @@ function getPriorityMeta(priority: string) {
   return PRIORITY_META[priority] ?? { color: 'text-slate-400 bg-slate-500/10', dot: 'bg-slate-400' }
 }
 
+function getActionForType(type: string) {
+  const t = type.toLowerCase()
+  if (t === 'backend' || t === 'frontend' || t === 'devops' || t === 'testing') {
+    return { label: 'Implement Code with AI', action: 'implement_code', icon: <Wand2 className="w-3.5 h-3.5" /> }
+  }
+  if (t === 'documentation' || t === 'document') {
+    return { label: 'Go to Docs Gen', action: 'navigate', to: '/docs', icon: <FileText className="w-3.5 h-3.5" /> }
+  }
+  if (t === 'architecture' || t === 'database architecture design' || t === 'database') {
+    return { label: 'Go to Architecture Gen', action: 'navigate', to: '/architecture', icon: <Layers className="w-3.5 h-3.5" /> }
+  }
+  if (t === 'requirement analysis' || t === 'requirements' || t === 'analysis' || t === 'design') {
+    return { label: 'View & Download Report', action: 'view_report', icon: <FileText className="w-3.5 h-3.5" /> }
+  }
+  // Default fallback for any other task type
+  return { label: 'View & Download Report', action: 'view_report', icon: <FileText className="w-3.5 h-3.5" /> }
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 // ── Saved Plans Section ───────────────────────────────────────────────────────
 
-function SavedPlansSection({ projectId }: { projectId: number }) {
+function SavedPlansSection({
+  projectId,
+  onViewReport,
+  onImplementType,
+  implementingType
+}: {
+  projectId: number
+  onViewReport: (featureName: string, tasks: any[]) => void
+  onImplementType: (featureId: number, featureName: string, type: string) => Promise<void>
+  implementingType: string | null
+}) {
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const navigate = useNavigate()
 
   const { data: plans, isLoading } = useQuery<SavedFeaturePlan[]>({
     queryKey: ['projectPlans', projectId],
@@ -148,7 +183,7 @@ function SavedPlansSection({ projectId }: { projectId: number }) {
                   <FolderKanban className="w-3.5 h-3.5 text-primary" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{feature.name}</p>
+                  <p className="text-sm font-semibold text-foreground truncate">{feature.featureName || feature.name}</p>
                   <p className="text-xs text-muted-foreground">{feature.tasks.length} tasks</p>
                 </div>
               </div>
@@ -170,6 +205,7 @@ function SavedPlansSection({ projectId }: { projectId: number }) {
               <div className="px-4 pb-4 pt-3 space-y-4 border-t border-border/40 animate-in fade-in slide-in-from-top-2 duration-200">
                 {Object.entries(tasksByType).map(([type, tasks]) => {
                   const meta = getTypeMeta(type)
+                  const actionBtn = getActionForType(type)
                   return (
                     <div key={type}>
                       <div className="flex items-center gap-2 mb-2">
@@ -177,7 +213,27 @@ function SavedPlansSection({ projectId }: { projectId: number }) {
                           {meta.icon} {type}
                         </div>
                         <div className="flex-1 h-px bg-border" />
-                        <span className="text-[10px] text-muted-foreground">
+
+                        {actionBtn && (
+                          <button
+                            onClick={() => {
+                              if (actionBtn.action === 'navigate') {
+                                navigate(actionBtn.to as string)
+                              } else if (actionBtn.action === 'implement_code' && feature.id) {
+                                onImplementType(feature.id, feature.featureName || feature.name || '', type)
+                              } else if (actionBtn.action === 'view_report') {
+                                onViewReport(feature.featureName || feature.name || '', tasks)
+                              }
+                            }}
+                            disabled={implementingType === type}
+                            className="shrink-0 flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors"
+                          >
+                            {implementingType === type ? <Loader2 className="w-3 h-3 animate-spin" /> : actionBtn.icon}
+                            {implementingType === type ? 'Implementing...' : actionBtn.label}
+                          </button>
+                        )}
+
+                        <span className="text-[10px] text-muted-foreground ml-2">
                           {tasks.length} task{tasks.length > 1 ? 's' : ''} · {tasks.reduce((s, t) => s + (t.estimatedHours || 0), 0)}h
                         </span>
                       </div>
@@ -233,6 +289,8 @@ export function PlannerPage() {
   const [loading, setLoading]           = useState(false)
   const [result, setResult]             = useState<PlanResult | null>(null)
   const [implemented, setImplemented]   = useState(false)
+  const [implementingType, setImplementingType] = useState<string | null>(null)
+  const [reportModalData, setReportModalData] = useState<{ featureName: string; tasks: any[] } | null>(null)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
@@ -321,7 +379,7 @@ export function PlannerPage() {
         )
       } else {
         setResult({
-          featureName: '', complexity: '', totalEstimatedHours: 0, tasks: [],
+          featureId: 0, featureName: '', complexity: '', totalEstimatedHours: 0, tasks: [],
           error: userMessage || 'Failed to generate plan. Please try again.'
         })
       }
@@ -357,6 +415,50 @@ export function PlannerPage() {
       navigate('/dashboard')
     } else {
       setImplemented(true)
+    }
+  }
+
+  const handleAiImplementType = async (featureId: number, featureName: string, type: string) => {
+    if (!featureId) return;
+    
+    setImplementingType(type);
+    try {
+      await apiClient.post(`/ai/implement-plan/${featureId}`);
+      
+      const res = await Swal.fire({
+        title: '✨ AI Implementation Complete!',
+        html: `
+          <p style="color:#a1a1aa;font-size:14px;line-height:1.6">
+            The tasks for <strong style="color:#fff">"${featureName}"</strong> have been successfully implemented by AI.
+            The files have been generated and saved into your project's workspace folder.
+          </p>`,
+        icon: 'success',
+        showCancelButton: true,
+        background: 'rgba(15,15,20,0.97)',
+        color: '#fff',
+        confirmButtonColor: '#6366f1',
+        confirmButtonText: '→ Go to Dashboard',
+        cancelButtonText: 'Stay here',
+        cancelButtonColor: '#3f3f46',
+        backdrop: 'rgba(0,0,0,0.5) blur(4px)',
+      });
+      
+      if (res.isConfirmed) {
+        navigate('/dashboard');
+      } else {
+        setImplemented(true);
+      }
+    } catch (error: any) {
+        Swal.fire({
+          title: 'Error Implementing Plan',
+          text: error.response?.data?.message || 'Failed to implement plan with AI. Please try again.',
+          icon: 'error',
+          background: 'rgba(15,15,20,0.95)',
+          color: '#fff',
+          confirmButtonColor: '#ef4444',
+        });
+    } finally {
+        setImplementingType(null);
     }
   }
 
@@ -497,7 +599,7 @@ export function PlannerPage() {
                   <CheckCircle2 className="w-4 h-4 text-green-400" />
                   <span className="text-xs text-green-400 font-medium uppercase tracking-wide">Plan Generated & Saved</span>
                 </div>
-                <h2 className="text-xl font-bold text-foreground">{result.featureName}</h2>
+                <h2 className="text-xl font-bold text-foreground">{result.featureName || result.name}</h2>
                 <p className="text-sm text-muted-foreground mt-0.5">
                   Linked to <span className="text-foreground font-medium">{selectedProject?.name}</span>
                 </p>
@@ -535,6 +637,7 @@ export function PlannerPage() {
           {/* Tasks By Category */}
           {Object.entries(tasksByType).map(([type, tasks]) => {
             const meta = getTypeMeta(type)
+            const actionBtn = getActionForType(type)
             return (
               <div key={type}>
                 {/* Category Header */}
@@ -544,7 +647,27 @@ export function PlannerPage() {
                     {type}
                   </div>
                   <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs text-muted-foreground">{tasks.length} task{tasks.length > 1 ? 's' : ''} · {tasks.reduce((s, t) => s + t.estimatedHours, 0)}h</span>
+                  
+                  {actionBtn && (
+                    <button
+                      onClick={() => {
+                        if (actionBtn.action === 'navigate') {
+                          navigate(actionBtn.to as string)
+                        } else if (actionBtn.action === 'implement_code' && result?.featureId) {
+                          handleAiImplementType(result.featureId, result.featureName || result.name || '', type)
+                        } else if (actionBtn.action === 'view_report') {
+                          setReportModalData({ featureName: result.featureName || result.name || '', tasks })
+                        }
+                      }}
+                      disabled={implementingType === type}
+                      className="shrink-0 flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1 rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary hover:text-white transition-colors"
+                    >
+                      {implementingType === type ? <Loader2 className="w-3 h-3 animate-spin" /> : actionBtn.icon}
+                      {implementingType === type ? 'Implementing...' : actionBtn.label}
+                    </button>
+                  )}
+
+                  <span className="text-xs text-muted-foreground ml-2">{tasks.length} task{tasks.length > 1 ? 's' : ''} · {tasks.reduce((s, t) => s + t.estimatedHours, 0)}h</span>
                 </div>
 
                 {/* Task Cards */}
@@ -612,9 +735,134 @@ export function PlannerPage() {
               </p>
             </div>
           </div>
-          <SavedPlansSection projectId={selectedProject.id} />
+          <SavedPlansSection
+            projectId={selectedProject.id}
+            onViewReport={(featureName, tasks) => setReportModalData({ featureName, tasks })}
+            onImplementType={handleAiImplementType}
+            implementingType={implementingType}
+          />
         </div>
       )}
+
+      {/* Requirement Report Modal */}
+      <RequirementReportModal
+        isOpen={!!reportModalData}
+        onClose={() => setReportModalData(null)}
+        featureName={reportModalData?.featureName || ''}
+        tasks={reportModalData?.tasks || []}
+      />
+    </div>
+  )
+}
+
+// ── Requirement Report Modal Component ──────────────────────────────────────────
+
+interface ReportModalProps {
+  isOpen: boolean
+  onClose: () => void
+  featureName: string
+  tasks: any[]
+}
+
+function RequirementReportModal({ isOpen, onClose, featureName, tasks }: ReportModalProps) {
+  if (!isOpen) return null
+
+  const handleDownload = () => {
+    const content = `# Requirement Analysis Report: ${featureName}
+
+## Overview
+This report contains the requirement analysis details generated for the feature: **${featureName}**.
+
+## Tasks Breakdown
+${tasks.map((t, idx) => `
+### ${idx + 1}. ${t.title}
+- **Description**: ${t.description}
+- **Priority**: ${t.priority}
+- **Estimated Hours**: ${t.estimatedHours || 0}h
+- **Status**: ${t.status || 'Pending'}
+`).join('\n')}
+
+---
+Generated by DeveloperEv AI Assistant on ${new Date().toLocaleDateString()}
+`;
+
+    const blob = new Blob([content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Requirement_Analysis_${featureName.replace(/\s+/g, '_')}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="relative w-full max-w-2xl bg-[#18181b]/95 border border-border/80 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border/60">
+          <div>
+            <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary" /> Requirement Analysis Report
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{featureName}</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+            <X className="w-4 h-4 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          <div className="space-y-4">
+            {tasks.map((t, idx) => (
+              <div key={idx} className="p-4 rounded-xl bg-white/5 border border-border/50">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h5 className="text-sm font-semibold text-foreground leading-tight">
+                    {idx + 1}. {t.title}
+                  </h5>
+                  <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                    t.priority === 'High' ? 'text-red-400 bg-red-500/10' :
+                    t.priority === 'Medium' ? 'text-amber-400 bg-amber-500/10' :
+                    'text-green-400 bg-green-500/10'
+                  }`}>
+                    {t.priority}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed mb-2">{t.description}</p>
+                <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" /> {t.estimatedHours}h estimated
+                  </span>
+                  {t.status && (
+                    <span className="bg-white/5 px-1.5 py-0.5 rounded">
+                      {t.status}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border/60 bg-white/[0.02]">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-white/5 transition-colors"
+          >
+            Close
+          </button>
+          <button
+            onClick={handleDownload}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-all"
+          >
+            <Download className="w-4 h-4" /> Download Report (.md)
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
