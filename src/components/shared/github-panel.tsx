@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { GlassCard } from '@/components/shared/glass-components'
 import {
-  Github, Star, GitFork, AlertCircle, Eye, Code2,
+  Github, Gitlab, Star, GitFork, AlertCircle, Eye, Code2,
   GitCommit, Loader2, Key, CheckCircle2, ExternalLink, RefreshCw,
   DownloadCloud, UploadCloud, BrainCircuit
 } from 'lucide-react'
@@ -10,24 +10,55 @@ import apiClient from '@/lib/api-client'
 import { Project } from '@/types/project'
 import { cn } from '@/lib/utils'
 
-// ── Util: parse GitHub URL → { owner, repo } ────────────────────────────────
-function parseGitHubUrl(url: string): { owner: string; repo: string } | null {
+// ── Util: parse Git URL → { provider, owner, repo, fullPath } ────────────────────────────────
+function parseGitUrl(urlStr: string): { provider: 'github' | 'gitlab'; owner: string; repo: string; fullPath: string; host: string; protocol: string } | null {
   try {
-    const match = url.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/|$)/)
-    if (match) return { owner: match[1], repo: match[2] }
+    const cleaned = urlStr.trim()
+    const url = new URL(cleaned.startsWith('http') ? cleaned : `https://${cleaned}`)
+    const hostname = url.hostname
+    const pathname = url.pathname.replace(/^\//, '').replace(/\.git$/, '')
+    
+    const parts = pathname.split('/')
+    if (parts.length < 2) return null
+    
+    const repo = parts[parts.length - 1]
+    const owner = parts.slice(0, parts.length - 1).join('/')
+    
+    const isGitLab = hostname.includes('gitlab')
+    const isGitHub = hostname.includes('github')
+    
+    if (isGitLab) {
+      return {
+        provider: 'gitlab',
+        host: hostname,
+        owner: owner,
+        repo: repo,
+        fullPath: pathname,
+        protocol: url.protocol
+      }
+    } else if (isGitHub) {
+      return {
+        provider: 'github',
+        host: hostname,
+        owner: owner,
+        repo: repo,
+        fullPath: pathname,
+        protocol: url.protocol
+      }
+    }
   } catch {}
   return null
 }
 
 // ── Token storage helpers ────────────────────────────────────────────────────
-const GLOBAL_TOKEN_KEY = 'gh_token_global'
-
-function getStoredToken() {
-  return localStorage.getItem(GLOBAL_TOKEN_KEY) ?? ''
+function getStoredToken(provider: 'github' | 'gitlab') {
+  const key = provider === 'gitlab' ? 'gl_token_global' : 'gh_token_global'
+  return localStorage.getItem(key) ?? ''
 }
-function saveToken(token: string) {
-  if (token) localStorage.setItem(GLOBAL_TOKEN_KEY, token)
-  else localStorage.removeItem(GLOBAL_TOKEN_KEY)
+function saveToken(provider: 'github' | 'gitlab', token: string) {
+  const key = provider === 'gitlab' ? 'gl_token_global' : 'gh_token_global'
+  if (token) localStorage.setItem(key, token)
+  else localStorage.removeItem(key)
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -56,9 +87,9 @@ interface Commit {
 // ── Main Component ───────────────────────────────────────────────────────────
 export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project: Project, leftPanelContent?: React.ReactNode, onAnalyze?: () => void }) {
   const queryClient = useQueryClient()
-  const parsed = project.githubRepoUrl ? parseGitHubUrl(project.githubRepoUrl) : null
+  const parsed = project.githubRepoUrl ? parseGitUrl(project.githubRepoUrl) : null
 
-  const [token, setToken] = useState(getStoredToken)
+  const [token, setToken] = useState(() => parsed ? getStoredToken(parsed.provider) : '')
   const [tokenInput, setTokenInput] = useState('')
   const [showTokenInput, setShowTokenInput] = useState(!token)
 
@@ -74,28 +105,31 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
   const [actionMessage, setActionMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null)
   const [notifiedCommitSha, setNotifiedCommitSha] = useState<string | null>(null)
 
-  // Re-init when project changes
+  // Re-init when project changes or parsed provider changes
   useEffect(() => {
-    const stored = getStoredToken()
+    const stored = parsed ? getStoredToken(parsed.provider) : ''
     setToken(stored)
     setShowTokenInput(!stored)
     setTokenInput('')
     setRepoData(null)
     setCommits([])
     setError('')
-  }, [project.id])
+  }, [project.id, parsed?.provider])
 
   // Auto-fetch when we have a token and parsed URL
   useEffect(() => {
     if (token && parsed) fetchData()
-  }, [token, project.id])
+  }, [token, project.id, parsed?.provider])
 
   // Poll for new commits
   useEffect(() => {
     if (!token || !parsed) return
     const interval = setInterval(async () => {
       try {
-        const commitsRes = await apiClient.get(`/github/commits?owner=${parsed.owner}&repo=${parsed.repo}&token=${token}`)
+        const url = parsed.provider === 'gitlab'
+          ? `/gitlab/commits?projectPath=${encodeURIComponent(parsed.fullPath)}&host=${encodeURIComponent(parsed.host)}&protocol=${encodeURIComponent(parsed.protocol)}&token=${token}`
+          : `/github/commits?owner=${parsed.owner}&repo=${parsed.repo}&token=${token}`
+        const commitsRes = await apiClient.get(url)
         const rawCommits = typeof commitsRes.data === 'string' ? JSON.parse(commitsRes.data) : commitsRes.data
         const latestCommits = Array.isArray(rawCommits) ? rawCommits.slice(0, 1) : []
         
@@ -109,7 +143,7 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
                import('sweetalert2').then(Swal => {
                   Swal.default.fire({
                     title: 'New Commit Detected!',
-                    text: 'A new commit was pushed to GitHub. Would you like to automatically pull and analyze the changes?',
+                    text: `A new commit was pushed to ${parsed.provider === 'gitlab' ? 'GitLab' : 'GitHub'}. Would you like to automatically pull and analyze the changes?`,
                     icon: 'info',
                     showCancelButton: true,
                     confirmButtonText: 'Pull & Analyze',
@@ -139,9 +173,16 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
     setLoading(true)
     setError('')
     try {
+      const repoUrl = parsed.provider === 'gitlab'
+        ? `/gitlab/repo?projectPath=${encodeURIComponent(parsed.fullPath)}&host=${encodeURIComponent(parsed.host)}&protocol=${encodeURIComponent(parsed.protocol)}&token=${token}`
+        : `/github/repo?owner=${parsed.owner}&repo=${parsed.repo}&token=${token}`
+      const commitsUrl = parsed.provider === 'gitlab'
+        ? `/gitlab/commits?projectPath=${encodeURIComponent(parsed.fullPath)}&host=${encodeURIComponent(parsed.host)}&protocol=${encodeURIComponent(parsed.protocol)}&token=${token}`
+        : `/github/commits?owner=${parsed.owner}&repo=${parsed.repo}&token=${token}`
+
       const [repoRes, commitsRes] = await Promise.all([
-        apiClient.get(`/github/repo?owner=${parsed.owner}&repo=${parsed.repo}&token=${token}`),
-        apiClient.get(`/github/commits?owner=${parsed.owner}&repo=${parsed.repo}&token=${token}`)
+        apiClient.get(repoUrl),
+        apiClient.get(commitsUrl)
       ])
       const repo = typeof repoRes.data === 'string' ? JSON.parse(repoRes.data) : repoRes.data
       const rawCommits = typeof commitsRes.data === 'string' ? JSON.parse(commitsRes.data) : commitsRes.data
@@ -149,11 +190,11 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
       setCommits(Array.isArray(rawCommits) ? rawCommits.slice(0, 8) : [])
     } catch (e: any) {
       const status = e?.response?.status
-      if (status === 401) setError('Invalid token. Please re-enter your GitHub PAT.')
+      if (status === 401) setError(`Invalid token. Please re-enter your ${parsed.provider === 'gitlab' ? 'GitLab' : 'GitHub'} PAT.`)
       else if (status === 404) setError('Repository not found. Check the URL and token scope.')
-      else setError('Failed to fetch GitHub data. Check your connection.')
+      else setError(`Failed to fetch ${parsed.provider === 'gitlab' ? 'GitLab' : 'GitHub'} data. Check your connection.`)
       setToken('')
-      saveToken('')
+      if (parsed) saveToken(parsed.provider, '')
       setShowTokenInput(true)
     } finally {
       setLoading(false)
@@ -162,14 +203,14 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
 
   function handleSaveToken() {
     const t = tokenInput.trim()
-    if (!t) return
-    saveToken(t)
+    if (!t || !parsed) return
+    saveToken(parsed.provider, t)
     setToken(t)
     setShowTokenInput(false)
   }
 
   function handleDisconnect() {
-    saveToken('')
+    if (parsed) saveToken(parsed.provider, '')
     setToken('')
     setShowTokenInput(true)
     setRepoData(null)
@@ -277,7 +318,7 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
   }
 
   async function handlePush() {
-    if (!token) return
+    if (!token || !parsed) return
     setPushing(true)
     setActionMessage(null)
     try {
@@ -286,10 +327,10 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
         projectId: project.id,
         commitMessage: `AI Auto-update for ${project.name}`
       })
-      setActionMessage({ type: 'success', text: 'Changes pushed to GitHub successfully.' })
+      setActionMessage({ type: 'success', text: `Changes pushed to ${parsed.provider === 'gitlab' ? 'GitLab' : 'GitHub'} successfully.` })
       fetchData() // Refresh commits
     } catch (e: any) {
-      setActionMessage({ type: 'error', text: e.response?.data || 'Failed to push changes to GitHub.' })
+      setActionMessage({ type: 'error', text: e.response?.data || `Failed to push changes to ${parsed.provider === 'gitlab' ? 'GitLab' : 'GitHub'}.` })
     } finally {
       setPushing(false)
     }
@@ -327,10 +368,10 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
       <GlassCard>
         <div className="flex items-center gap-3 mb-4">
           <Github className="w-5 h-5 text-muted-foreground" />
-          <h3 className="font-semibold text-foreground">GitHub Integration</h3>
+          <h3 className="font-semibold text-foreground">Repository Integration</h3>
         </div>
         <p className="text-sm text-muted-foreground">
-          No GitHub repository linked to this project. Add a repo URL when creating or updating the project.
+          No GitHub/GitLab repository linked to this project. Add a repo URL when creating or updating the project.
         </p>
       </GlassCard>
     )
@@ -341,11 +382,11 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
     return renderLayout(
       <GlassCard>
         <div className="flex items-center gap-3 mb-3">
-          <Github className="w-5 h-5 text-amber-500" />
-          <h3 className="font-semibold text-foreground">GitHub Integration</h3>
+          <AlertCircle className="w-5 h-5 text-amber-500" />
+          <h3 className="font-semibold text-foreground">Repository Integration</h3>
         </div>
         <p className="text-sm text-muted-foreground">
-          Could not parse the GitHub URL: <code className="text-xs bg-muted px-1 py-0.5 rounded">{project.githubRepoUrl}</code>
+          Could not parse the Git URL: <code className="text-xs bg-muted px-1 py-0.5 rounded">{project.githubRepoUrl}</code>
         </p>
       </GlassCard>
     )
@@ -353,15 +394,16 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
 
   // ── Token Entry ──────────────────────────────────────────────────────────
   if (showTokenInput) {
+    const isGitLab = parsed.provider === 'gitlab'
     return renderLayout(
       <GlassCard>
         <div className="flex items-center gap-3 mb-1">
-          <Github className="w-5 h-5 text-foreground" />
-          <h3 className="font-semibold text-foreground">GitHub Integration</h3>
+          {isGitLab ? <Gitlab className="w-5 h-5 text-foreground" /> : <Github className="w-5 h-5 text-foreground" />}
+          <h3 className="font-semibold text-foreground">{isGitLab ? 'GitLab' : 'GitHub'} Integration</h3>
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          Enter a GitHub Personal Access Token (PAT) to fetch live data for{' '}
-          <span className="text-primary font-medium">{parsed.owner}/{parsed.repo}</span>.
+          Enter a {isGitLab ? 'GitLab' : 'GitHub'} Personal Access Token (PAT) to fetch live data for{' '}
+          <span className="text-primary font-medium">{parsed.fullPath}</span>.
         </p>
         {error && (
           <div className="mb-3 flex items-center gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg px-3 py-2">
@@ -374,7 +416,7 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
             <Key className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="password"
-              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+              placeholder={isGitLab ? "glpat-xxxxxxxxxxxxxxxxxxxx" : "ghp_xxxxxxxxxxxxxxxxxxxx"}
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSaveToken()}
@@ -390,7 +432,7 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-2">
-          Needs <code className="bg-muted px-1 rounded">repo</code> scope. Token is stored locally in your browser only.
+          Needs {isGitLab ? <code className="bg-muted px-1 rounded">api</code> : <code className="bg-muted px-1 rounded">repo</code>} scope. Token is stored locally in your browser only.
         </p>
       </GlassCard>
     )
@@ -414,7 +456,7 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
       <div className="flex items-start justify-between gap-4 mb-4">
         <div className="flex items-center gap-3 min-w-0">
           <div className="p-2 bg-foreground/10 rounded-xl shrink-0">
-            <Github className="w-5 h-5" />
+            {parsed?.provider === 'gitlab' ? <Gitlab className="w-5 h-5 text-orange-500" /> : <Github className="w-5 h-5" />}
           </div>
           <div className="min-w-0">
             <a
@@ -442,7 +484,7 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
           <button
             onClick={handleDisconnect}
             className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors text-muted-foreground hover:text-destructive"
-            title="Disconnect GitHub"
+            title={`Disconnect ${parsed?.provider === 'gitlab' ? 'GitLab' : 'GitHub'}`}
           >
             <Key className="w-3.5 h-3.5" />
           </button>
@@ -558,7 +600,7 @@ export function GitHubPanel({ project, leftPanelContent, onAnalyze }: { project:
       <div className="mt-4 pt-3 border-t border-border/40">
         <div className="flex items-center gap-2 text-xs text-green-500">
           <CheckCircle2 className="w-3.5 h-3.5" />
-          Connected via GitHub API · Token stored locally
+          Connected via {parsed?.provider === 'gitlab' ? 'GitLab' : 'GitHub'} API &middot; Token stored locally
         </div>
       </div>
     </GlassCard>

@@ -901,6 +901,18 @@ function handleDownloadGlobalPlan(feature: any) {
     return acc
   }, {})
 
+  const categorySubtitles: Record<string, string> = {
+    Backend:       "SERVICE LOGIC, API ROUTING & BACKEND OPERATIONS",
+    Frontend:      "USER INTERFACES, COMPONENTS & CLIENT-SIDE LOGIC",
+    Design:        "USER EXPERIENCE, STYLING & WIREFRAMES",
+    Security:      "AUTHENTICATION, AUTHORIZATION & SYSTEM HARDENING",
+    Testing:       "UNIT TESTS, INTEGRATION TESTING & QUALITY ASSURANCE",
+    Documentation: "TECHNICAL DOCUMENTATION & KNOWLEDGE BASE",
+    DevOps:        "DEPLOYMENT PIPELINES, CONTAINERIZATION & CLOUD",
+    Architecture:  "SYSTEM DESIGN, CLASS DIAGRAMS & DATA FLOWS",
+    Database:      "DATABASE ARCHITECTURE, SCHEMA & MIGRATIONS",
+  }
+
   let categoriesHtml = ''
   Object.entries(tasksByType).forEach(([type, tasks]: [string, any]) => {
     let tasksHtml = ''
@@ -922,16 +934,18 @@ function handleDownloadGlobalPlan(feature: any) {
     })
 
     const iconSvg = getSvgIconForType(type)
+    const sub = categorySubtitles[type] || "PLAN SPECIFICATIONS & DEVELOPMENT TASKS"
 
     categoriesHtml += `
       <div class="category-section">
         <div class="category-header">
           ${iconSvg}
-          <span style="margin-left: 8px;">${type}</span>
-          <span style="font-size: 12px; font-weight: normal; color: #64748b; margin-left: auto;">
-            ${tasks.length} tasks · ${tasks.reduce((s: number, t: any) => s + (t.estimatedHours || 0), 0)}h
+          <span style="margin-left: 10px;">${type} Development Plan</span>
+          <span class="category-meta-hours">
+            ${tasks.length} tasks &middot; ${tasks.reduce((s: number, t: any) => s + (t.estimatedHours || 0), 0)}h
           </span>
         </div>
+        <div class="category-subtitle">${sub}</div>
         <div>
           ${tasksHtml}
         </div>
@@ -944,7 +958,7 @@ function handleDownloadGlobalPlan(feature: any) {
     <div class="subtitle">DEVELOPMENT PLAN & REQUIREMENTS SPECIFICATION</div>
     <div class="meta-info">
       <strong>Complexity:</strong> ${feature.complexity} &nbsp;|&nbsp; 
-      <strong>Total Estimated Hours:</strong> ${feature.totalEstimatedHours || feature.totalEstimatedHours || 0}h &nbsp;|&nbsp; 
+      <strong>Total Estimated Hours:</strong> ${feature.totalEstimatedHours || 0}h &nbsp;|&nbsp; 
       <strong>Generated:</strong> ${new Date(feature.createdAt || Date.now()).toLocaleDateString()}
     </div>
     ${categoriesHtml}
@@ -962,35 +976,72 @@ function handleDownloadGlobalPlan(feature: any) {
             font-family: 'Inter', sans-serif;
             color: #0f172a;
             line-height: 1.5;
-            padding: 40px;
+            padding: 50px;
             background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
           h1 {
             font-size: 32px;
             font-weight: 800;
             margin-bottom: 6px;
-            color: #1e1b4b;
+            color: #0f172a;
           }
           .subtitle {
             font-size: 12px;
             font-weight: 700;
             color: #4f46e5;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.08em;
           }
           .meta-info {
             font-size: 12px;
             color: #64748b;
-            margin-bottom: 24px;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 12px;
+            margin-bottom: 32px;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 16px;
+          }
+          .category-section {
+            page-break-inside: avoid;
+            margin-bottom: 30px;
+          }
+          .category-header {
+            display: flex;
+            align-items: center;
+            font-size: 22px;
+            font-weight: 800;
+            color: #1e1b4b;
+            margin-top: 36px;
+            margin-bottom: 2px;
+          }
+          .category-subtitle {
+            font-size: 10px;
+            font-weight: 700;
+            color: #6366f1;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 18px;
+            border-bottom: 1.5px solid #e2e8f0;
+            padding-bottom: 6px;
+          }
+          .category-meta-hours {
+            font-size: 12px;
+            font-weight: 500;
+            color: #64748b;
+            margin-left: auto;
+          }
+          .category-icon {
+            width: 24px;
+            height: 24px;
+            stroke-width: 2.5;
           }
           .task-card {
             border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 12px;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 16px;
+            background: #f8fafc;
             page-break-inside: avoid;
           }
           .task-header {
@@ -1000,47 +1051,34 @@ function handleDownloadGlobalPlan(feature: any) {
             margin-bottom: 8px;
           }
           .task-title {
-            font-weight: 600;
-            font-size: 14px;
+            font-weight: 700;
+            font-size: 15px;
             color: #0f172a;
           }
           .badge {
             font-size: 10px;
             font-weight: 700;
-            padding: 2px 8px;
+            padding: 3px 10px;
             border-radius: 9999px;
             text-transform: uppercase;
+            letter-spacing: 0.05em;
             margin-left: auto;
           }
-          .badge-high { background-color: #fee2e2; color: #991b1b; }
-          .badge-medium { background-color: #fef3c7; color: #92400e; }
-          .badge-low { background-color: #dcfce7; color: #166534; }
-          .category-header {
-            display: flex;
-            align-items: center;
-            font-size: 16px;
-            font-weight: 700;
-            color: #1e1b4b;
-            margin-top: 32px;
-            margin-bottom: 16px;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 6px;
-          }
-          .category-icon {
-            width: 18px;
-            height: 18px;
-            stroke-width: 2.5;
-          }
+          .badge-high { background-color: #fee2e2 !important; color: #991b1b !important; }
+          .badge-medium { background-color: #fef3c7 !important; color: #92400e !important; }
+          .badge-low { background-color: #dcfce7 !important; color: #166534 !important; }
           .task-desc {
-            font-size: 12px;
-            color: #475569;
-            margin-bottom: 8px;
+            font-size: 12.5px;
+            color: #334155;
+            margin-bottom: 10px;
+            line-height: 1.6;
           }
           .task-meta {
             font-size: 11px;
             color: #64748b;
+            font-weight: 500;
             display: flex;
-            gap: 12px;
+            gap: 16px;
           }
           @media print {
             body { padding: 20px; }
@@ -1311,12 +1349,12 @@ function ProjectPlansTab({ project }: { project: Project | null }) {
                     type="text"
                     value={editFeatureName}
                     onChange={e => setEditFeatureName(e.target.value)}
-                    className="bg-[#18181b] border border-border rounded-lg px-2 py-1 text-sm text-foreground w-full max-w-[200px]"
+                    className="bg-background border border-border rounded-lg px-2 py-1 text-sm text-foreground w-full max-w-[200px]"
                   />
                   <select
                     value={editFeatureComplexity}
                     onChange={e => setEditFeatureComplexity(e.target.value)}
-                    className="bg-[#18181b] border border-border rounded-lg px-2 py-1 text-xs text-foreground"
+                    className="bg-background border border-border rounded-lg px-2 py-1 text-xs text-foreground"
                   >
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
@@ -1458,21 +1496,21 @@ function ProjectPlansTab({ project }: { project: Project | null }) {
                                     type="text"
                                     value={editTaskTitle}
                                     onChange={e => setEditTaskTitle(e.target.value)}
-                                    className="w-full text-xs font-semibold text-foreground bg-[#18181b] border border-border rounded px-2 py-1"
+                                    className="w-full text-xs font-semibold text-foreground bg-background border border-border rounded px-2 py-1"
                                     placeholder="Task Title"
                                   />
                                   <textarea
                                     value={editTaskDesc}
                                     onChange={e => setEditTaskDesc(e.target.value)}
                                     rows={2}
-                                    className="w-full text-[11px] text-muted-foreground bg-[#18181b] border border-border rounded px-2 py-1 resize-none"
+                                    className="w-full text-[11px] text-muted-foreground bg-background border border-border rounded px-2 py-1 resize-none"
                                     placeholder="Task Description"
                                   />
                                   <div className="flex items-center gap-2">
                                     <select
                                       value={editTaskPriority}
                                       onChange={e => setEditTaskPriority(e.target.value)}
-                                      className="text-[10px] bg-[#18181b] border border-border rounded px-1.5 py-0.5 text-foreground"
+                                      className="text-[10px] bg-background border border-border rounded px-1.5 py-0.5 text-foreground"
                                     >
                                       <option value="High">High</option>
                                       <option value="Medium">Medium</option>
@@ -1482,7 +1520,7 @@ function ProjectPlansTab({ project }: { project: Project | null }) {
                                       type="number"
                                       value={editTaskHours}
                                       onChange={e => setEditTaskHours(parseInt(e.target.value) || 0)}
-                                      className="w-16 text-[10px] bg-[#18181b] border border-border rounded px-1.5 py-0.5 text-foreground"
+                                      className="w-16 text-[10px] bg-background border border-border rounded px-1.5 py-0.5 text-foreground"
                                       placeholder="Hours"
                                     />
                                     <button

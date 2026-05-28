@@ -17,6 +17,8 @@ import Swal from 'sweetalert2'
 // ── Types ────────────────────────────────────────────────────────────────────
 
 interface TaskDto {
+  id?: number
+  status?: string
   title: string
   description: string
   type: string
@@ -124,6 +126,18 @@ function handleDownloadGlobalPlan(feature: any) {
     return acc
   }, {})
 
+  const categorySubtitles: Record<string, string> = {
+    Backend:       "SERVICE LOGIC, API ROUTING & BACKEND OPERATIONS",
+    Frontend:      "USER INTERFACES, COMPONENTS & CLIENT-SIDE LOGIC",
+    Design:        "USER EXPERIENCE, STYLING & WIREFRAMES",
+    Security:      "AUTHENTICATION, AUTHORIZATION & SYSTEM HARDENING",
+    Testing:       "UNIT TESTS, INTEGRATION TESTING & QUALITY ASSURANCE",
+    Documentation: "TECHNICAL DOCUMENTATION & KNOWLEDGE BASE",
+    DevOps:        "DEPLOYMENT PIPELINES, CONTAINERIZATION & CLOUD",
+    Architecture:  "SYSTEM DESIGN, CLASS DIAGRAMS & DATA FLOWS",
+    Database:      "DATABASE ARCHITECTURE, SCHEMA & MIGRATIONS",
+  }
+
   let categoriesHtml = ''
   Object.entries(tasksByType).forEach(([type, tasks]: [string, any]) => {
     let tasksHtml = ''
@@ -145,16 +159,18 @@ function handleDownloadGlobalPlan(feature: any) {
     })
 
     const iconSvg = getSvgIconForType(type)
+    const sub = categorySubtitles[type] || "PLAN SPECIFICATIONS & DEVELOPMENT TASKS"
 
     categoriesHtml += `
       <div class="category-section">
         <div class="category-header">
           ${iconSvg}
-          <span style="margin-left: 8px;">${type}</span>
-          <span style="font-size: 12px; font-weight: normal; color: #64748b; margin-left: auto;">
-            ${tasks.length} tasks · ${tasks.reduce((s: number, t: any) => s + (t.estimatedHours || 0), 0)}h
+          <span style="margin-left: 10px;">${type} Development Plan</span>
+          <span class="category-meta-hours">
+            ${tasks.length} tasks &middot; ${tasks.reduce((s: number, t: any) => s + (t.estimatedHours || 0), 0)}h
           </span>
         </div>
+        <div class="category-subtitle">${sub}</div>
         <div>
           ${tasksHtml}
         </div>
@@ -167,7 +183,7 @@ function handleDownloadGlobalPlan(feature: any) {
     <div class="subtitle">DEVELOPMENT PLAN & REQUIREMENTS SPECIFICATION</div>
     <div class="meta-info">
       <strong>Complexity:</strong> ${feature.complexity} &nbsp;|&nbsp; 
-      <strong>Total Estimated Hours:</strong> ${feature.totalEstimatedHours || feature.totalEstimatedHours || 0}h &nbsp;|&nbsp; 
+      <strong>Total Estimated Hours:</strong> ${feature.totalEstimatedHours || 0}h &nbsp;|&nbsp; 
       <strong>Generated:</strong> ${new Date(feature.createdAt || Date.now()).toLocaleDateString()}
     </div>
     ${categoriesHtml}
@@ -185,35 +201,72 @@ function handleDownloadGlobalPlan(feature: any) {
             font-family: 'Inter', sans-serif;
             color: #0f172a;
             line-height: 1.5;
-            padding: 40px;
+            padding: 50px;
             background: #ffffff;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
           h1 {
             font-size: 32px;
             font-weight: 800;
             margin-bottom: 6px;
-            color: #1e1b4b;
+            color: #0f172a;
           }
           .subtitle {
             font-size: 12px;
             font-weight: 700;
             color: #4f46e5;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.08em;
           }
           .meta-info {
             font-size: 12px;
             color: #64748b;
-            margin-bottom: 24px;
-            border-bottom: 1px solid #e2e8f0;
-            padding-bottom: 12px;
+            margin-bottom: 32px;
+            border-bottom: 2px solid #f1f5f9;
+            padding-bottom: 16px;
+          }
+          .category-section {
+            page-break-inside: avoid;
+            margin-bottom: 30px;
+          }
+          .category-header {
+            display: flex;
+            align-items: center;
+            font-size: 22px;
+            font-weight: 800;
+            color: #1e1b4b;
+            margin-top: 36px;
+            margin-bottom: 2px;
+          }
+          .category-subtitle {
+            font-size: 10px;
+            font-weight: 700;
+            color: #6366f1;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 18px;
+            border-bottom: 1.5px solid #e2e8f0;
+            padding-bottom: 6px;
+          }
+          .category-meta-hours {
+            font-size: 12px;
+            font-weight: 500;
+            color: #64748b;
+            margin-left: auto;
+          }
+          .category-icon {
+            width: 24px;
+            height: 24px;
+            stroke-width: 2.5;
           }
           .task-card {
             border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 12px;
+            border-radius: 12px;
+            padding: 18px;
+            margin-bottom: 16px;
+            background: #f8fafc;
             page-break-inside: avoid;
           }
           .task-header {
@@ -223,47 +276,34 @@ function handleDownloadGlobalPlan(feature: any) {
             margin-bottom: 8px;
           }
           .task-title {
-            font-weight: 600;
-            font-size: 14px;
+            font-weight: 700;
+            font-size: 15px;
             color: #0f172a;
           }
           .badge {
             font-size: 10px;
             font-weight: 700;
-            padding: 2px 8px;
+            padding: 3px 10px;
             border-radius: 9999px;
             text-transform: uppercase;
+            letter-spacing: 0.05em;
             margin-left: auto;
           }
-          .badge-high { background-color: #fee2e2; color: #991b1b; }
-          .badge-medium { background-color: #fef3c7; color: #92400e; }
-          .badge-low { background-color: #dcfce7; color: #166534; }
-          .category-header {
-            display: flex;
-            align-items: center;
-            font-size: 16px;
-            font-weight: 700;
-            color: #1e1b4b;
-            margin-top: 32px;
-            margin-bottom: 16px;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 6px;
-          }
-          .category-icon {
-            width: 18px;
-            height: 18px;
-            stroke-width: 2.5;
-          }
+          .badge-high { background-color: #fee2e2 !important; color: #991b1b !important; }
+          .badge-medium { background-color: #fef3c7 !important; color: #92400e !important; }
+          .badge-low { background-color: #dcfce7 !important; color: #166534 !important; }
           .task-desc {
-            font-size: 12px;
-            color: #475569;
-            margin-bottom: 8px;
+            font-size: 12.5px;
+            color: #334155;
+            margin-bottom: 10px;
+            line-height: 1.6;
           }
           .task-meta {
             font-size: 11px;
             color: #64748b;
+            font-weight: 500;
             display: flex;
-            gap: 12px;
+            gap: 16px;
           }
           @media print {
             body { padding: 20px; }
@@ -748,6 +788,127 @@ export function PlannerPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  // Editing states for freshly generated result plan
+  const [editingResultFeature, setEditingResultFeature] = useState(false)
+  const [editFeatureName, setEditFeatureName] = useState('')
+  const [editFeatureComplexity, setEditFeatureComplexity] = useState('')
+
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null)
+  const [editTaskTitle, setEditTaskTitle] = useState('')
+  const [editTaskDesc, setEditTaskDesc] = useState('')
+  const [editTaskPriority, setEditTaskPriority] = useState('')
+  const [editTaskHours, setEditTaskHours] = useState<number>(0)
+
+  const handleSaveResultFeature = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!result) return
+    try {
+      await apiClient.put(`/features/${result.featureId}`, {
+        name: editFeatureName,
+        complexity: editFeatureComplexity
+      })
+      setResult(prev => prev ? { ...prev, name: editFeatureName, featureName: editFeatureName, complexity: editFeatureComplexity } : null)
+      setEditingResultFeature(false)
+      queryClient.invalidateQueries({ queryKey: ['projectPlans', selectedProject?.id] })
+      Swal.fire({
+        title: 'Updated',
+        text: 'Plan updated successfully.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false,
+        background: 'rgba(15,15,20,0.95)',
+        color: '#fff',
+      })
+    } catch (err) {
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to update plan.',
+        icon: 'error',
+        background: 'rgba(15,15,20,0.95)',
+        color: '#fff',
+      })
+    }
+  }
+
+  const handleDeleteResultFeature = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!result) return
+    const res = await Swal.fire({
+      title: 'Delete Generated Plan?',
+      text: `Are you sure you want to delete "${result.featureName || result.name}"? This will permanently delete all associated tasks.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Delete',
+      cancelButtonText: 'Cancel',
+      confirmButtonColor: '#ef4444',
+      cancelButtonColor: '#3f3f46',
+      background: 'rgba(15,15,20,0.95)',
+      color: '#fff',
+    })
+
+    if (res.isConfirmed) {
+      try {
+        await apiClient.delete(`/features/${result.featureId}`)
+        setResult(null)
+        setImplemented(false)
+        queryClient.invalidateQueries({ queryKey: ['projectPlans', selectedProject?.id] })
+        Swal.fire({
+          title: 'Deleted',
+          text: 'Generated plan has been deleted.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false,
+          background: 'rgba(15,15,20,0.95)',
+          color: '#fff',
+        })
+      } catch (err) {
+        Swal.fire({
+          title: 'Error',
+          text: 'Failed to delete plan.',
+          icon: 'error',
+          background: 'rgba(15,15,20,0.95)',
+          color: '#fff',
+        })
+      }
+    }
+  }
+
+  const handleSaveResultTask = async (taskId: number) => {
+    try {
+      await apiClient.put(`/tasks/${taskId}`, {
+        title: editTaskTitle,
+        description: editTaskDesc,
+        estimatedHours: editTaskHours,
+        priority: editTaskPriority
+      })
+      setResult(prev => {
+        if (!prev) return null
+        const updatedTasks = prev.tasks.map(t => t.id === taskId ? { ...t, title: editTaskTitle, description: editTaskDesc, estimatedHours: editTaskHours, priority: editTaskPriority } : t)
+        const totalHours = updatedTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0)
+        return { ...prev, tasks: updatedTasks, totalEstimatedHours: totalHours }
+      })
+      setEditingTaskId(null)
+      queryClient.invalidateQueries({ queryKey: ['projectPlans', selectedProject?.id] })
+      Swal.fire({
+        title: 'Updated',
+        text: 'Task updated successfully.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false,
+        background: 'rgba(15,15,20,0.95)',
+        color: '#fff',
+      })
+    } catch (err) {
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to update task.',
+        icon: 'error',
+        background: 'rgba(15,15,20,0.95)',
+        color: '#fff',
+      })
+    }
+  }
+
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ['projects'],
     queryFn: () => projectService.getMyProjects(),
@@ -1048,25 +1209,82 @@ export function PlannerPage() {
           {/* Summary Banner */}
           <GlassCard>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 className="w-4 h-4 text-green-400" />
-                  <span className="text-xs text-green-400 font-medium uppercase tracking-wide">Plan Generated & Saved</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xl font-bold text-foreground">{result.featureName || result.name}</h2>
-                  <button
-                    onClick={() => handleDownloadGlobalPlan(result)}
-                    className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                    title="Download Full Plan (PDF)"
+              {editingResultFeature ? (
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <FolderKanban className="w-4 h-4 text-primary shrink-0" />
+                  <input
+                    type="text"
+                    value={editFeatureName}
+                    onChange={e => setEditFeatureName(e.target.value)}
+                    className="bg-[#18181b] border border-border rounded-lg px-2 py-1 text-sm text-foreground w-full max-w-[240px]"
+                  />
+                  <select
+                    value={editFeatureComplexity}
+                    onChange={e => setEditFeatureComplexity(e.target.value)}
+                    className="bg-[#18181b] border border-border rounded-lg px-2 py-1 text-xs text-foreground"
                   >
-                    <Download className="w-4 h-4" />
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                  </select>
+                  <button
+                    onClick={handleSaveResultFeature}
+                    className="p-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white transition-colors"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setEditingResultFeature(false)}
+                    className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
+                  >
+                    <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  Linked to <span className="text-foreground font-medium">{selectedProject?.name}</span>
-                </p>
-              </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <CheckCircle2 className="w-4 h-4 text-green-400" />
+                    <span className="text-xs text-green-400 font-medium uppercase tracking-wide">Plan Generated & Saved</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-xl font-bold text-foreground">{result.featureName || result.name}</h2>
+                    
+                    {/* Edit Button */}
+                    <button
+                      onClick={() => {
+                        setEditingResultFeature(true)
+                        setEditFeatureName(result.featureName || result.name || '')
+                        setEditFeatureComplexity(result.complexity)
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                      title="Edit Plan"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Delete Button */}
+                    <button
+                      onClick={handleDeleteResultFeature}
+                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors shrink-0"
+                      title="Delete Plan"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {/* Download PDF */}
+                    <button
+                      onClick={() => handleDownloadGlobalPlan(result)}
+                      className="p-1.5 rounded-lg hover:bg-blue-500/10 text-muted-foreground hover:text-blue-400 transition-colors shrink-0"
+                      title="Download Full Plan (PDF)"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-0.5">
+                    Linked to <span className="text-foreground font-medium">{selectedProject?.name}</span>
+                  </p>
+                </div>
+              )}
 
               <div className="flex flex-wrap gap-3">
                 {/* Complexity */}
@@ -1137,23 +1355,99 @@ export function PlannerPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {tasks.map((task, i) => {
                     const pMeta = getPriorityMeta(task.priority)
+                    const isTaskEditing = editingTaskId === task.id
                     return (
                       <div
-                        key={i}
+                        key={task.id || i}
                         className="group relative p-4 rounded-xl bg-background/40 border border-border hover:border-primary/30 hover:bg-background/60 transition-all"
                       >
-                        <div className="flex items-start justify-between gap-2 mb-2">
-                          <h4 className="text-sm font-semibold text-foreground leading-tight">{task.title}</h4>
-                          <span className={`flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${pMeta.color}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${pMeta.dot}`} />
-                            {task.priority}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed mb-3">{task.description}</p>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-3 h-3 text-muted-foreground" />
-                          <span className="text-xs text-muted-foreground">{task.estimatedHours}h estimated</span>
-                        </div>
+                        {isTaskEditing ? (
+                          <div className="space-y-2">
+                            <input
+                              type="text"
+                              value={editTaskTitle}
+                              onChange={e => setEditTaskTitle(e.target.value)}
+                              className="w-full text-xs font-semibold text-foreground bg-[#18181b] border border-border rounded px-2 py-1"
+                              placeholder="Task Title"
+                            />
+                            <textarea
+                              value={editTaskDesc}
+                              onChange={e => setEditTaskDesc(e.target.value)}
+                              rows={2}
+                              className="w-full text-[11px] text-muted-foreground bg-[#18181b] border border-border rounded px-2 py-1 resize-none"
+                              placeholder="Task Description"
+                            />
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={editTaskPriority}
+                                onChange={e => setEditTaskPriority(e.target.value)}
+                                className="text-[10px] bg-[#18181b] border border-border rounded px-1.5 py-0.5 text-foreground"
+                              >
+                                <option value="High">High</option>
+                                <option value="Medium">Medium</option>
+                                <option value="Low">Low</option>
+                              </select>
+                              <input
+                                type="number"
+                                value={editTaskHours}
+                                onChange={e => setEditTaskHours(parseInt(e.target.value) || 0)}
+                                className="w-16 text-[10px] bg-[#18181b] border border-border rounded px-1.5 py-0.5 text-foreground"
+                                placeholder="Hours"
+                              />
+                              <button
+                                onClick={() => handleSaveResultTask(task.id!)}
+                                className="ml-auto flex items-center gap-1 text-[10px] font-semibold bg-green-500/20 text-green-400 border border-green-500/30 px-2 py-1 rounded hover:bg-green-500 hover:text-white transition-all"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingTaskId(null)}
+                                className="flex items-center gap-1 text-[10px] font-semibold bg-white/5 text-muted-foreground border border-border px-2 py-1 rounded hover:bg-white/10 hover:text-white transition-all"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <h4 className="text-sm font-semibold text-foreground leading-tight">{task.title}</h4>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${pMeta.color}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${pMeta.dot}`} />
+                                  {task.priority}
+                                </span>
+                                {task.id && (
+                                  <button
+                                    onClick={() => {
+                                      setEditingTaskId(task.id!)
+                                      setEditTaskTitle(task.title)
+                                      setEditTaskDesc(task.description)
+                                      setEditTaskPriority(task.priority)
+                                      setEditTaskHours(task.estimatedHours)
+                                    }}
+                                    className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+                                    title="Edit Task"
+                                  >
+                                    <Edit2 className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed mb-3">{task.description}</p>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-3 h-3 text-muted-foreground" />
+                                <span className="text-xs text-muted-foreground">{task.estimatedHours}h estimated</span>
+                              </div>
+                              {task.status && (
+                                <span className="text-[9px] font-medium text-muted-foreground bg-muted/40 px-1.5 py-0.5 rounded-full">
+                                  {task.status}
+                                </span>
+                              )}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )
                   })}
