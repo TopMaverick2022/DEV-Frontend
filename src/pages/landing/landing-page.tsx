@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
-import { ArrowRight, Moon, Sun, Sparkles, Terminal } from 'lucide-react'
+import { ArrowRight, Moon, Sun, Sparkles, Terminal, Play, Pause, Volume2, VolumeX } from 'lucide-react'
 import { DevLogo } from '@/components/shared/dev-logo'
 import { useTheme } from '@/components/theme-provider'
 import { FeatureScrollReveal } from '@/components/shared/feature-scroll-reveal'
@@ -8,11 +8,34 @@ import { MagneticButton } from '@/components/shared/magnetic-button'
 import { AnimatedBackground } from '@/components/shared/animated-background'
 import { useAuth } from '@/features/auth/auth-context'
 import { UserNav } from '@/components/layout/user-nav'
+import { useRef, useState } from 'react'
+
+// Import video asset
+import demoVideo from '@/assets/where_are_the_texts_of_my_webs.mp4'
 
 export function LandingPage() {
   const navigate = useNavigate()
   const { theme, setTheme } = useTheme()
   const { isAuthenticated } = useAuth()
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isPlaying, setIsPlaying] = useState(true)
+  const [isMuted, setIsMuted] = useState(true)
+
+  const togglePlay = () => {
+    if (!videoRef.current) return
+    if (isPlaying) {
+      videoRef.current.pause()
+    } else {
+      videoRef.current.play()
+    }
+    setIsPlaying(!isPlaying)
+  }
+
+  const toggleMute = () => {
+    if (!videoRef.current) return
+    videoRef.current.muted = !isMuted
+    setIsMuted(!isMuted)
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground selection:bg-primary/20 overflow-x-hidden">
@@ -76,7 +99,7 @@ export function LandingPage() {
               The ultimate all-in-one AI execution platform. From dynamic architecture planning to automated debugging, DeveloperEv accelerates your entire development lifecycle.
             </p>
             
-            <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center">
+            <div className="flex flex-col sm:flex-row items-center gap-4 w-full justify-center mb-16">
               <MagneticButton
                 onClick={() => navigate(isAuthenticated ? '/dashboard' : '/register')}
                 className="w-full sm:w-auto relative group overflow-hidden bg-primary text-primary-foreground px-8 py-3 rounded-full text-base font-bold transition-all duration-300 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] flex items-center justify-center gap-2">
@@ -85,12 +108,62 @@ export function LandingPage() {
                 </span>
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out" />
               </MagneticButton>
-              {/* <MagneticButton
-                onClick={() => navigate('/login')}
-                className="w-full sm:w-auto border border-border bg-card/50 backdrop-blur-md hover:bg-muted/80 text-foreground px-8 py-3 rounded-full text-base font-medium transition-all duration-300 shadow-sm">
-                View Documentation
-              </MagneticButton> */}
             </div>
+
+            {/* Video Showcase Card with Watermark Crop */}
+            <motion.div
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.2 }}
+              className="w-full max-w-5xl mx-auto rounded-2xl overflow-hidden glass border border-border/80 shadow-2xl relative group/video"
+            >
+              {/* Aspect Ratio Box with inner crop */}
+              <div className="relative w-full aspect-video overflow-hidden bg-black/40">
+                {/* 
+                  To crop the watermark (usually bottom right or top/bottom edges), 
+                  we scale the video slightly (e.g., scale-105) and shift it up slightly
+                  so the bottom watermark is cut off by the overflow-hidden parent.
+                */}
+                <video
+                  ref={videoRef}
+                  src={demoVideo}
+                  className="w-full h-full object-cover scale-[1.08] origin-top"
+                  autoPlay
+                  loop
+                  muted={isMuted}
+                  playsInline
+                />
+
+                {/* Glass controls overlay on hover */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/30 opacity-0 group-hover/video:opacity-100 transition-opacity duration-300 flex flex-col justify-between p-4">
+                  <div className="flex justify-between items-center w-full">
+                    <span className="text-xs font-semibold bg-primary/20 backdrop-blur-md border border-primary/30 text-primary px-3 py-1.5 rounded-full flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 animate-pulse" /> Live Product Demo
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center w-full">
+                    <button
+                      onClick={togglePlay}
+                      className="p-3 bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md rounded-full text-white transition-all transform active:scale-95"
+                    >
+                      {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 fill-white" />}
+                    </button>
+
+                    <button
+                      onClick={toggleMute}
+                      className="p-3 bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md rounded-full text-white transition-all transform active:scale-95"
+                    >
+                      {isMuted ? <VolumeX className="w-5 h-5" /> : <Volume2 className="w-5 h-5" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Subtle top border glow */}
+                <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-white/40 to-transparent pointer-events-none" />
+              </div>
+            </motion.div>
+
           </motion.div>
         </div>
       </section>
@@ -115,3 +188,4 @@ export function LandingPage() {
     </div>
   )
 }
+

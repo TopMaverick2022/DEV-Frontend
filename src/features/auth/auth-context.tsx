@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authService } from './auth-service';
 
 interface User {
@@ -35,20 +35,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     initAuth();
   }, []);
 
-  const login = (userData: { username: string; accessToken: string; refreshToken?: string }) => {
+  const login = useCallback((userData: { username: string; accessToken: string; refreshToken?: string }) => {
     localStorage.setItem('accessToken', userData.accessToken);
     if (userData.refreshToken) {
       localStorage.setItem('refreshToken', userData.refreshToken);
     }
     localStorage.setItem('username', userData.username);
     setUser({ username: userData.username });
-  };
+  }, []);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     authService.logout();
     localStorage.removeItem('username');
     setUser(null);
-  };
+  }, []);
 
   return (
     <AuthContext.Provider value={{ 

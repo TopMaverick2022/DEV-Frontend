@@ -681,11 +681,17 @@ export function DashboardPage() {
                 <div className="mt-4 space-y-2">
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Processed Files</p>
                   <div className="bg-black/20 rounded-xl border border-border/50 p-3 max-h-60 overflow-y-auto custom-scrollbar">
-                    {analysisState.logs.map((log, i) => (
+                    {analysisState.logs.map((log, i) => {
+                      const isProcessing = i === analysisState.logs.length - 1 && !analysisState.isComplete;
+                      return (
                       <div key={i} className="flex items-center gap-2 py-1.5 text-xs text-muted-foreground border-b border-white/5 last:border-0 hover:bg-white/5 px-1 rounded transition-colors">
-                        <CheckCircle className="w-3 h-3 text-green-500/60 shrink-0" />
-                        <span className="truncate">{log}</span>
-                        {i === analysisState.logs.length - 1 && !analysisState.isComplete && (
+                        {isProcessing ? (
+                          <Loader2 className="w-3 h-3 text-primary animate-spin shrink-0" />
+                        ) : (
+                          <CheckCircle className="w-3 h-3 text-green-500/60 shrink-0" />
+                        )}
+                        <span className={cn("truncate", isProcessing ? "text-primary font-medium" : "")}>{log}</span>
+                        {isProcessing && (
                           <span className="ml-auto flex gap-0.5">
                             <span className="w-1 h-1 bg-primary rounded-full animate-bounce" />
                             <span className="w-1 h-1 bg-primary rounded-full animate-bounce [animation-delay:0.2s]" />
@@ -693,7 +699,7 @@ export function DashboardPage() {
                           </span>
                         )}
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
               )}
