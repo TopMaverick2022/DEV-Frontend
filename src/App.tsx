@@ -20,6 +20,7 @@ import { SecurityIssuesPage } from '@/pages/dashboard/security-issues-page'
 import { CodeBugsPage } from '@/pages/dashboard/code-bugs-page'
 import { HealthScorePage } from '@/pages/dashboard/health-score-page'
 import { TechDebtPage } from '@/pages/dashboard/tech-debt-page'
+import { ProjectExplorerPage } from '@/pages/dashboard/project-explorer-page'
 import { AppLayout } from '@/components/layout/app-layout'
 import { SmoothScrollProvider } from './components/shared/smooth-scroll-provider'
 import { AuthProvider } from '@/features/auth/auth-context'
@@ -56,7 +57,7 @@ function App() {
               <Route path="/security" element={<AppLayout><SecurityPage /></AppLayout>} />
               <Route path="/performance" element={<AppLayout><PerformancePage /></AppLayout>} />
               <Route path="/docs" element={<AppLayout><DocsPage /></AppLayout>} />
-              <Route path="/health" element={<AppLayout><DashboardPage /></AppLayout>} />
+              <Route path="/explorer" element={<AppLayout><ProjectExplorerPage /></AppLayout>} />
 
               {/* Dashboard stat drill-down pages */}
               <Route path="/dashboard/projects/:projectId/security" element={<AppLayout><SecurityIssuesPage /></AppLayout>} />

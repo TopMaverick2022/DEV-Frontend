@@ -104,7 +104,7 @@ export function LandingPage() {
                 onClick={() => navigate(isAuthenticated ? '/dashboard' : '/register')}
                 className="w-full sm:w-auto relative group overflow-hidden bg-primary text-primary-foreground px-8 py-3 rounded-full text-base font-bold transition-all duration-300 hover:shadow-[0_0_40px_rgba(124,58,237,0.5)] flex items-center justify-center gap-2">
                 <span className="relative z-10 flex items-center gap-2">
-                  <Terminal className="w-4 h-4" /> Start Executing
+                  <Terminal className="w-4 h-4" /> Get Started
                 </span>
                 <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-in-out" />
               </MagneticButton>

@@ -1,0 +1,76 @@
+import { useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { projectService } from '@/features/projects/project-service'
+import { Project } from '@/types/project'
+import { ProjectSwitcher } from '@/components/shared/project-switcher'
+import { RepositoryBrowser } from '@/components/shared/repository-browser'
+import { Loader2, FolderKanban } from 'lucide-react'
+
+export function ProjectExplorerPage() {
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+
+  const { data: projects, isLoading } = useQuery({
+    queryKey: ['projects'],
+    queryFn: projectService.getMyProjects,
+  })
+
+  // Sync with localStorage
+  useEffect(() => {
+    if (projects && projects.length > 0) {
+      const savedId = localStorage.getItem('selectedProjectId')
+      const matched = savedId ? projects.find(p => p.id === parseInt(savedId)) : null
+      if (matched) {
+        setSelectedProject(matched)
+      } else if (!selectedProject) {
+        setSelectedProject(projects[0])
+      }
+    }
+  }, [projects])
+
+  const handleSelectProject = (project: Project) => {
+    setSelectedProject(project)
+    localStorage.setItem('selectedProjectId', project.id.toString())
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <FolderKanban className="w-8 h-8 text-primary" /> Live Project Explorer
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Browse files currently checked out into the backend AI pipeline.
+          </p>
+        </div>
+        {projects && projects.length > 0 && (
+          <ProjectSwitcher
+            projects={projects}
+            selected={selectedProject}
+            onSelect={handleSelectProject}
+          />
+        )}
+      </div>
+
+      {selectedProject ? (
+        <RepositoryBrowser projectId={selectedProject.id} className="shadow-xl" />
+      ) : (
+        <div className="flex flex-col items-center justify-center p-20 glass rounded-3xl border-dashed border-2 text-center space-y-4">
+          <FolderKanban className="w-10 h-10 text-muted-foreground" />
+          <h3 className="text-xl font-bold text-foreground">No Projects Found</h3>
+          <p className="text-muted-foreground max-w-xs mx-auto">
+            Please create a project first to explore its files.
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}

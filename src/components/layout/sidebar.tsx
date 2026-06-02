@@ -10,11 +10,11 @@ import {
   ShieldCheck,
   Zap,
   FileText,
-  Activity,
   Settings,
   ChevronDown,
   PanelLeftClose,
   PanelLeftOpen,
+  FolderKanban,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -26,7 +26,7 @@ const groups = [
     icon: Wand2,
     items: [
       { icon: Wand2,  label: 'Project Planner',  path: '/planner' },
-      { icon: Layers, label: 'Architecture Gen',  path: '/architecture' },
+      { icon: Layers, label: 'Architecture Generator',  path: '/architecture' },
       { icon: Code2,  label: 'Code Reviewer',     path: '/reviewer' },
       { icon: Search, label: 'Code Explainer',    path: '/explainer' },
       { icon: Bug,    label: 'Debugger',           path: '/debugger' },
@@ -38,8 +38,7 @@ const groups = [
     items: [
       { icon: ShieldCheck, label: 'Security',         path: '/security' },
       { icon: Zap,         label: 'Performance',      path: '/performance' },
-      { icon: FileText,    label: 'Docs Gen',         path: '/docs' },
-      { icon: Activity,    label: 'Health Dashboard', path: '/health' },
+      { icon: FileText,    label: 'Docs Generator',         path: '/docs' },
     ],
   },
 ]
@@ -96,6 +95,15 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
             label="Dashboard"
             path="/dashboard"
             isActive={location.pathname === '/dashboard'}
+            collapsed={collapsed}
+          />
+
+          {/* Project Explorer */}
+          <NavItem
+            icon={FolderKanban}
+            label="Project Explorer"
+            path="/explorer"
+            isActive={location.pathname === '/explorer'}
             collapsed={collapsed}
           />
 

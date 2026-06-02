@@ -8,6 +8,7 @@ import {
 } from 'recharts'
 import {
   Code,
+  BrainCircuit,
   ShieldCheck,
   Zap,
   ArrowUpRight,
@@ -49,87 +50,13 @@ import apiClient, { tokenStore } from '@/lib/api-client'
 import { useNavigate } from 'react-router-dom'
 import { Project } from '@/types/project'
 import { GitHubPanel } from '@/components/shared/github-panel'
-import { RepositoryBrowser } from '@/components/shared/repository-browser'
+import { ProjectSwitcher } from '@/components/shared/project-switcher'
 import { AlertCircle } from 'lucide-react'
 import Swal from 'sweetalert2'
 import './quota-alerts.css' // We'll create this for custom styling
 
 
-// ── Project Switcher Dropdown ────────────────────────────────────────────────
-function ProjectSwitcher({
-  projects,
-  selected,
-  onSelect
-}: {
-  projects: Project[]
-  selected: Project | null
-  onSelect: (p: Project) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-
-  // Close on outside click
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center justify-between gap-2 glass border border-border/50 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-white/10 transition-all duration-200 w-[220px] shrink-0"
-      >
-        <FolderOpen className="w-4 h-4 text-primary shrink-0" />
-        <span className="truncate flex-1 text-left max-w-[140px]">
-          {selected?.name ?? 'Select project'}
-        </span>
-        <ChevronDown className={cn('w-4 h-4 shrink-0 text-muted-foreground transition-transform duration-200', open && 'rotate-180')} />
-      </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.97 }}
-            transition={{ duration: 0.15 }}
-            className="absolute left-0 top-full mt-2 w-64 z-50 bg-card border border-border rounded-xl shadow-2xl shadow-black/30 overflow-hidden"
-          >
-            <div className="p-1.5 max-h-64 overflow-y-auto">
-              {projects.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => { onSelect(p); setOpen(false) }}
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors',
-                    selected?.id === p.id
-                      ? 'bg-primary/10 text-primary font-semibold'
-                      : 'hover:bg-accent text-foreground'
-                  )}
-                >
-                  <FolderOpen className="w-4 h-4 shrink-0 opacity-60" />
-              <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium">{p.name}</p>
-                    {p.description && (
-                      <p className="truncate text-xs text-muted-foreground">{p.description}</p>
-                    )}
-                  </div>
-                  {selected?.id === p.id && (
-                    <CheckCircle className="w-3.5 h-3.5 shrink-0 ml-auto text-primary" />
-                  )}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  )
-}
+// ProjectSwitcher component has been moved to shared components
 
 // ── Dashboard Page ────────────────────────────────────────────────────────────
 export function DashboardPage() {
@@ -172,10 +99,10 @@ export function DashboardPage() {
       setUploadState('done')
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       
-      // Auto-trigger analysis for the new project
-      if (data?.projectId) {
-        handleAnalyzeWorkspace(data.projectId, data.projectName || file.name)
-      }
+      // Auto-trigger analysis for the new project (REMOVED: User wants to manually trigger analysis)
+      // if (data?.projectId) {
+      //   handleAnalyzeWorkspace(data.projectId, data.projectName || file.name)
+      // }
     } catch (error: any) {
       console.error('Upload failed:', error)
       setUploadState('idle')
@@ -390,12 +317,23 @@ export function DashboardPage() {
     enabled: !!selectedProject?.id,
   });
 
-  // Auto-select the first project when projects load, only once
+  // Sync with localStorage
   useEffect(() => {
-    if (projects && projects.length > 0 && !selectedProject) {
-      setSelectedProject(projects[0])
+    if (projects && projects.length > 0) {
+      const savedId = localStorage.getItem('selectedProjectId')
+      const matched = savedId ? projects.find(p => p.id === parseInt(savedId)) : null
+      if (matched) {
+        setSelectedProject(matched)
+      } else if (!selectedProject) {
+        setSelectedProject(projects[0])
+      }
     }
-  }, [projects]);
+  }, [projects])
+
+  const handleSelectProject = (project: Project) => {
+    setSelectedProject(project)
+    localStorage.setItem('selectedProjectId', project.id.toString())
+  }
 
   if (isLoading) {
     return (
@@ -445,7 +383,7 @@ export function DashboardPage() {
               <ProjectSwitcher
                 projects={projects}
                 selected={selectedProject}
-                onSelect={setSelectedProject}
+                onSelect={handleSelectProject}
               />
             )}
 
@@ -579,36 +517,35 @@ export function DashboardPage() {
                   />
                 ) : (
                   <>
-                    <div className="lg:col-span-2">
+                    <div className="lg:col-span-2 min-w-0">
                       <ProjectMetricsPane project={selectedProject} projectStats={projectStats} />
+                    </div>
+                    <div className="lg:col-span-1 min-w-0">
+                      <GlassCard className="flex flex-col items-center justify-center text-center gap-4 py-8 h-full">
+                        <div className="p-4 rounded-full bg-purple-500/10">
+                          <BrainCircuit className="w-8 h-8 text-purple-500" />
+                        </div>
+                        <div>
+                          {/* <h3 className="text-lg font-bold">Manual Analysis</h3> */}
+                          <p className="text-sm text-muted-foreground mt-1 px-4">Run AI code analysis on your uploaded ZIP project.</p>
+                        </div>
+                        <button
+                          onClick={() => handleAnalyzeWorkspace()}
+                          disabled={analysisState.active}
+                          className="mt-4 px-6 py-2.5 bg-purple-500 text-white rounded-lg font-bold hover:bg-purple-600 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
+                        >
+                          {analysisState.active ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing...</>
+                          ) : (
+                            <><BrainCircuit className="w-4 h-4" /> Analyze</>
+                          )}
+                        </button>
+                      </GlassCard>
                     </div>
                   </>
                 )}
               </div>
 
-              {/* Repository Browser Section */}
-              {selectedProject?.id && (
-                <div className="mt-8">
-                  <div className="mb-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                      <h3 className="text-lg font-bold text-foreground">Live Server Projects View</h3>
-                      <p className="text-sm text-muted-foreground">Browse files currently checked out into the backend AI pipeline.</p>
-                    </div>
-                    {/* Native Analyze trigger for non-GitHub environments */}
-                    {!selectedProject.githubRepoUrl && (
-                      <button 
-                        onClick={() => handleAnalyzeWorkspace()}
-                        disabled={analysisState.active}
-                        className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white shadow-lg shadow-purple-600/20 px-4 py-2 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all"
-                      >
-                        {analysisState.active ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                        AI Analyze Codebase
-                      </button>
-                    )}
-                  </div>
-                  <RepositoryBrowser projectId={selectedProject.id} />
-                </div>
-              )}
           </motion.div>
         ) : (
           <div className="flex flex-col items-center justify-center p-20 glass rounded-3xl border-dashed border-2 text-center space-y-4">
