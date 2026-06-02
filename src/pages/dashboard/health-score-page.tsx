@@ -75,15 +75,15 @@ export function HealthScorePage() {
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
                 <p className="text-xl font-bold text-red-500">{data?.totalSecurityIssues ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Security (−5 each)</p>
+                <p className="text-xs text-muted-foreground">Security (Weight: 5)</p>
               </div>
               <div>
                 <p className="text-xl font-bold text-yellow-500">{data?.totalBugs ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Bugs (−2 each)</p>
+                <p className="text-xs text-muted-foreground">Bugs (Weight: 2)</p>
               </div>
               <div>
                 <p className="text-xl font-bold text-orange-500">{data?.totalPerformanceIssues ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Performance (−1 each)</p>
+                <p className="text-xs text-muted-foreground">Performance (Weight: 1)</p>
               </div>
             </div>
           </div>
@@ -97,11 +97,8 @@ export function HealthScorePage() {
           <div>
             <h3 className="font-bold text-blue-400 mb-2">How the Score Is Calculated</h3>
             <p className="text-sm text-muted-foreground">
-              The AI Health Score starts at <strong>100%</strong> and decreases based on detected issues.
-              Each <span className="text-red-400 font-semibold">security vulnerability</span> deducts 5 points,
-              each <span className="text-yellow-400 font-semibold">bug</span> deducts 2 points, and
-              each <span className="text-orange-400 font-semibold">performance issue</span> deducts 1 point.
-              The score never goes below 0%. If no files have been analyzed, the score shows 0%.
+              The AI Health Score is calculated based on detected issues. Each <span className="text-red-400 font-semibold">security vulnerability</span> adds 5 to the penalty, each <span className="text-yellow-400 font-semibold">bug</span> adds 2, and each <span className="text-orange-400 font-semibold">performance issue</span> adds 1.
+              The final score is determined using an inverse-proportional formula: <code>100 * (100 / (100 + penalty))</code>. This ensures the score scales down gracefully and never drops straight to 0% even with multiple issues. If no files have been analyzed, the score shows 0%.
             </p>
           </div>
         </div>
@@ -132,8 +129,8 @@ export function HealthScorePage() {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="text-2xl font-black text-red-500">−{file.pointsDeducted}</p>
-                  <p className="text-xs text-muted-foreground">points</p>
+                  <p className="text-2xl font-black text-red-500">+{file.pointsDeducted}</p>
+                  <p className="text-xs text-muted-foreground">penalty</p>
                 </div>
               </GlassCard>
             ))}
