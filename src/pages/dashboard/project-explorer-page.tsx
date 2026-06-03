@@ -61,7 +61,7 @@ export function ProjectExplorerPage() {
       </div>
 
       {selectedProject ? (
-        <RepositoryBrowser projectId={selectedProject.id} className="shadow-xl" />
+        <RepositoryBrowser project={selectedProject} projectId={selectedProject.id} className="shadow-xl" />
       ) : (
         <div className="flex flex-col items-center justify-center p-20 glass rounded-3xl border-dashed border-2 text-center space-y-4">
           <FolderKanban className="w-10 h-10 text-muted-foreground" />
