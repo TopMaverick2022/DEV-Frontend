@@ -3,6 +3,13 @@ export interface Project {
   name: string;
   description: string;
   githubRepoUrl: string;
+  language?: string;
+  languageVersion?: string;
+  framework?: string;
+  frameworkVersion?: string;
+  databaseName?: string;
+  databaseVersion?: string;
+  dependencies?: string;
   createdAt: string;
   owner?: {
     id: number;

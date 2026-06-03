@@ -1,14 +1,34 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
-import { Plus, Github, Gitlab, Loader2, X, CheckCircle2, AlertCircle, Key, Eye, EyeOff } from 'lucide-react'
+import { Plus, Github, Gitlab, Loader2, X, CheckCircle2, AlertCircle, Key, Eye, EyeOff, Code2, Sparkles } from 'lucide-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
+
+const LANGUAGES = ['Java', 'Python', 'JavaScript', 'TypeScript', 'Go', 'Rust', 'Ruby', 'C#']
+const FRAMEWORKS: Record<string, string[]> = {
+  Java: ['Spring Boot', 'Quarkus', 'Micronaut', 'Jakarta EE'],
+  Python: ['Django', 'FastAPI', 'Flask', 'Tornado'],
+  JavaScript: ['Express', 'Next.js', 'NestJS', 'React', 'Vue'],
+  TypeScript: ['NestJS', 'Next.js', 'Express', 'React', 'Vue', 'Angular'],
+  Go: ['Gin', 'Fiber', 'Echo', 'Standard Library'],
+  Rust: ['Actix-web', 'Axum', 'Rocket'],
+  Ruby: ['Ruby on Rails', 'Sinatra'],
+  'C#': ['ASP.NET Core', 'Nancy']
+}
+const DATABASES = ['PostgreSQL', 'MySQL', 'MongoDB', 'SQLite', 'Redis', 'Oracle', 'None']
 
 interface CreateProjectPayload {
   name: string
   description: string
   githubRepoUrl: string
+  language?: string
+  languageVersion?: string
+  framework?: string
+  frameworkVersion?: string
+  databaseName?: string
+  databaseVersion?: string
+  dependencies?: string
 }
 
 interface GitHubRepoMeta {
@@ -22,6 +42,13 @@ async function createProjectApi(payload: CreateProjectPayload) {
     name: payload.name,
     description: payload.description,
     githubRepoUrl: payload.githubRepoUrl,
+    language: payload.language,
+    languageVersion: payload.languageVersion,
+    framework: payload.framework,
+    frameworkVersion: payload.frameworkVersion,
+    databaseName: payload.databaseName,
+    databaseVersion: payload.databaseVersion,
+    dependencies: payload.dependencies,
   })
   return response.data
 }
@@ -74,6 +101,60 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
   // Access Token - loaded dynamically based on detected Git provider
   const [token, setToken] = useState('')
   const [showToken, setShowToken] = useState(false)
+
+  // Tech stack states
+  const [language, setLanguage] = useState('')
+  const [customLanguage, setCustomLanguage] = useState('')
+  const [languageVersion, setLanguageVersion] = useState('')
+  const [framework, setFramework] = useState('')
+  const [customFramework, setCustomFramework] = useState('')
+  const [frameworkVersion, setFrameworkVersion] = useState('')
+  const [databaseName, setDatabaseName] = useState('')
+  const [customDatabaseName, setCustomDatabaseName] = useState('')
+  const [databaseVersion, setDatabaseVersion] = useState('')
+
+  // AI dependencies recommendation states
+  const [dependenciesList, setDependenciesList] = useState<{ name: string; description: string; checked: boolean }[]>([])
+  const [fetchingDeps, setFetchingDeps] = useState(false)
+
+  // Reset framework when language changes
+  useEffect(() => {
+    setFramework('')
+    setFrameworkVersion('')
+  }, [language])
+
+  // Fetch AI recommended dependencies when stack changes (debounced by 600ms)
+  useEffect(() => {
+    if (!language) {
+      setDependenciesList([])
+      return
+    }
+
+    setFetchingDeps(true)
+    const timeoutId = setTimeout(async () => {
+      try {
+        const finalLanguage = language === 'Other' ? customLanguage : language
+        const finalFramework = framework === 'Other' ? customFramework : framework
+        const finalDatabase = databaseName === 'Other' ? customDatabaseName : databaseName
+
+        const res = await apiClient.post('/ai/recommend-dependencies', {
+          language: finalLanguage,
+          languageVersion,
+          framework: finalFramework,
+          frameworkVersion,
+          database: finalDatabase,
+          databaseVersion
+        })
+        setDependenciesList(res.data || [])
+      } catch (err) {
+        console.error('Failed to fetch recommended dependencies', err)
+      } finally {
+        setFetchingDeps(false)
+      }
+    }, 600)
+
+    return () => clearTimeout(timeoutId)
+  }, [language, customLanguage, languageVersion, framework, customFramework, frameworkVersion, databaseName, customDatabaseName, databaseVersion])
 
   // Auto-fetch repo metadata states
   const [repoFetchState, setRepoFetchState] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
@@ -181,10 +262,23 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     const finalName = name.trim() || (parsed ? parsed.repo : '')
     if (!finalName) return
+
+    const selectedDeps = dependenciesList
+      .filter(d => d.checked)
+      .map(d => d.name)
+      .join(', ')
+
     createMutation.mutate({
       name: finalName,
       description,
-      githubRepoUrl: githubRepoUrl.trim()
+      githubRepoUrl: githubRepoUrl.trim(),
+      language: language === 'Other' ? customLanguage : language,
+      languageVersion,
+      framework: framework === 'Other' ? customFramework : framework,
+      frameworkVersion,
+      databaseName: databaseName === 'Other' ? customDatabaseName : databaseName,
+      databaseVersion,
+      dependencies: selectedDeps
     })
   }
 
@@ -319,6 +413,174 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                 className="w-full bg-muted dark:bg-background/50 border border-input rounded-lg px-4 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground resize-none"
               />
             </div>
+
+            {/* Tech Stack Selection */}
+            <div className="border-t border-border/40 pt-4 space-y-4">
+              <h3 className="text-sm font-semibold text-primary flex items-center gap-1.5">
+                <Code2 className="w-4 h-4" /> Tech Stack Configuration
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {/* Language */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-foreground">Language</label>
+                  <select
+                    value={language}
+                    onChange={(e) => {
+                      setLanguage(e.target.value)
+                      if (e.target.value !== 'Other') setCustomLanguage('')
+                    }}
+                    className="w-full bg-muted dark:bg-background/50 border border-input rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Select Language...</option>
+                    {LANGUAGES.map(lang => (
+                      <option key={lang} value={lang}>{lang}</option>
+                    ))}
+                    <option value="Other">Other</option>
+                  </select>
+                  {language === 'Other' && (
+                    <input
+                      type="text"
+                      placeholder="Specify Language"
+                      value={customLanguage}
+                      onChange={(e) => setCustomLanguage(e.target.value)}
+                      className="w-full mt-2 bg-muted dark:bg-background/50 border border-input rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground/60"
+                    />
+                  )}
+                </div>
+                {/* Language Version */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-foreground">Language Version</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 17, 3.11, 20"
+                    value={languageVersion}
+                    onChange={(e) => setLanguageVersion(e.target.value)}
+                    disabled={!language}
+                    className="w-full bg-muted dark:bg-background/50 border border-input rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground/60 disabled:opacity-50"
+                  />
+                </div>
+
+                {/* Framework */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-foreground">Framework</label>
+                  <select
+                    value={framework}
+                    onChange={(e) => {
+                      setFramework(e.target.value)
+                      if (e.target.value !== 'Other') setCustomFramework('')
+                    }}
+                    disabled={!language}
+                    className="w-full bg-muted dark:bg-background/50 border border-input rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                  >
+                    <option value="">Select Framework...</option>
+                    {language && FRAMEWORKS[language]?.map(fw => (
+                      <option key={fw} value={fw}>{fw}</option>
+                    ))}
+                    <option value="Other">Other</option>
+                  </select>
+                  {framework === 'Other' && (
+                    <input
+                      type="text"
+                      placeholder="Specify Framework"
+                      value={customFramework}
+                      onChange={(e) => setCustomFramework(e.target.value)}
+                      className="w-full mt-2 bg-muted dark:bg-background/50 border border-input rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground/60"
+                    />
+                  )}
+                </div>
+                {/* Framework Version */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-foreground">Framework Version</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 3.2, 5.0, 14"
+                    value={frameworkVersion}
+                    onChange={(e) => setFrameworkVersion(e.target.value)}
+                    disabled={!framework}
+                    className="w-full bg-muted dark:bg-background/50 border border-input rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground/60 disabled:opacity-50"
+                  />
+                </div>
+
+                {/* Database */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-foreground">Database</label>
+                  <select
+                    value={databaseName}
+                    onChange={(e) => {
+                      setDatabaseName(e.target.value)
+                      if (e.target.value !== 'Other') setCustomDatabaseName('')
+                    }}
+                    className="w-full bg-muted dark:bg-background/50 border border-input rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">Select Database...</option>
+                    {DATABASES.map(db => (
+                      <option key={db} value={db}>{db}</option>
+                    ))}
+                    <option value="Other">Other</option>
+                  </select>
+                  {databaseName === 'Other' && (
+                    <input
+                      type="text"
+                      placeholder="Specify Database"
+                      value={customDatabaseName}
+                      onChange={(e) => setCustomDatabaseName(e.target.value)}
+                      className="w-full mt-2 bg-muted dark:bg-background/50 border border-input rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground/60"
+                    />
+                  )}
+                </div>
+                {/* Database Version */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-foreground">Database Version</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 16, 8.0"
+                    value={databaseVersion}
+                    onChange={(e) => setDatabaseVersion(e.target.value)}
+                    disabled={!databaseName || databaseName === 'None'}
+                    className="w-full bg-muted dark:bg-background/50 border border-input rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-muted-foreground/60 disabled:opacity-50"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Recommended Dependencies */}
+            {language && (
+              <div className="space-y-2 border-t border-border/40 pt-4">
+                <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" /> Optional Dependencies Recommended by AI
+                </label>
+                {fetchingDeps ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground animate-pulse py-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+                    <span>Asking AI for recommendations...</span>
+                  </div>
+                ) : dependenciesList.length > 0 ? (
+                  <div className="max-h-40 overflow-y-auto space-y-1.5 border border-border/40 rounded-lg p-2.5 bg-background/30">
+                    {dependenciesList.map((dep, idx) => (
+                      <label key={idx} className="flex items-start gap-2.5 p-1.5 hover:bg-white/5 rounded transition-colors cursor-pointer text-xs">
+                        <input
+                          type="checkbox"
+                          checked={dep.checked}
+                          onChange={(e) => {
+                            const updated = [...dependenciesList]
+                            updated[idx].checked = e.target.checked
+                            setDependenciesList(updated)
+                          }}
+                          className="mt-0.5 rounded border-input text-primary focus:ring-primary w-3.5 h-3.5"
+                        />
+                        <div className="space-y-0.5 text-left">
+                          <span className="font-semibold text-foreground">{dep.name}</span>
+                          <p className="text-[10px] text-muted-foreground leading-normal">{dep.description}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic py-1">No dependency recommendations available for this stack.</p>
+                )}
+              </div>
+            )}
 
             <div className="flex gap-3 pt-2">
               <button

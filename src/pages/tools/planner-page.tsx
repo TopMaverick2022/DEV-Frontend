@@ -34,6 +34,7 @@ interface PlanResult {
   totalEstimatedHours: number
   tasks: TaskDto[]
   error?: string
+  detectedNeeds?: string
 }
 
 interface SavedFeaturePlan {
@@ -42,6 +43,7 @@ interface SavedFeaturePlan {
   name?: string
   complexity: string
   totalEstimatedHours: number
+  detectedNeeds?: string
   tasks: {
     id: number
     title: string
@@ -366,6 +368,10 @@ function SavedPlansSection({
   const [editFeatureName, setEditFeatureName] = useState('')
   const [editFeatureComplexity, setEditFeatureComplexity] = useState('')
 
+  // Editing Stacks state
+  const [editingStacksId, setEditingStacksId] = useState<number | null>(null)
+  const [editStacksText, setEditStacksText] = useState('')
+
   // Editing Task states
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null)
   const [editTaskTitle, setEditTaskTitle] = useState('')
@@ -404,6 +410,36 @@ function SavedPlansSection({
       Swal.fire({
         title: 'Error',
         text: 'Failed to update feature plan.',
+        icon: 'error',
+        background: 'rgba(15,15,20,0.95)',
+        color: '#fff',
+      })
+    }
+  }
+
+  const handleSaveStacks = async (feature: SavedFeaturePlan, newStacksText?: string) => {
+    const textToSave = newStacksText !== undefined ? newStacksText : editStacksText;
+    try {
+      await apiClient.put(`/features/${feature.id}`, {
+        name: feature.featureName || feature.name,
+        complexity: feature.complexity,
+        detectedNeeds: textToSave
+      })
+      setEditingStacksId(null)
+      queryClient.invalidateQueries({ queryKey: ['projectPlans', projectId] })
+      Swal.fire({
+        title: 'Updated',
+        text: 'Tech stacks updated successfully.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false,
+        background: 'rgba(15,15,20,0.95)',
+        color: '#fff',
+      })
+    } catch (err) {
+      Swal.fire({
+        title: 'Error',
+        text: 'Failed to update tech stacks.',
         icon: 'error',
         background: 'rgba(15,15,20,0.95)',
         color: '#fff',
@@ -629,6 +665,75 @@ function SavedPlansSection({
             {/* Expanded task list */}
             {isOpen && (
               <div className="px-4 pb-4 pt-3 space-y-4 border-t border-border/40 animate-in fade-in slide-in-from-top-2 duration-200">
+                {((feature.detectedNeeds?.trim().length ?? 0) > 0 || editingStacksId === feature.id) && (
+                  <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/10 text-left">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <h4 className="text-xs font-semibold text-primary flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-primary" />
+                        AI-Detected Stack Needs
+                      </h4>
+                      {editingStacksId !== feature.id && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setEditingStacksId(feature.id)
+                            setEditStacksText(feature.detectedNeeds || '')
+                          }}
+                          className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-primary transition-colors"
+                          title="Edit Stacks"
+                        >
+                          <Edit2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    {editingStacksId === feature.id ? (
+                      <div className="flex items-center gap-2 mt-2">
+                        <input
+                          type="text"
+                          value={editStacksText}
+                          onChange={e => setEditStacksText(e.target.value)}
+                          className="flex-1 bg-[#18181b] border border-primary/30 rounded px-2 py-1 text-xs text-primary focus:outline-none focus:border-primary"
+                          placeholder="Comma-separated stack needs"
+                        />
+                        <button
+                          onClick={() => handleSaveStacks(feature)}
+                          className="p-1.5 rounded bg-green-500/20 text-green-400 hover:bg-green-500 hover:text-white transition-colors"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setEditingStacksId(null)}
+                          className="p-1.5 rounded bg-white/5 text-muted-foreground hover:bg-white/10 transition-colors"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-1.5">
+                        {feature.detectedNeeds?.split(',').filter((n: string) => n.trim().length > 0).map((need: string, i: number) => {
+                          const stackItem = need.trim()
+                          return (
+                            <span key={i} className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 group">
+                              {stackItem}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  const currentStacks = feature.detectedNeeds?.split(',').map((n: string) => n.trim()).filter((n: string) => n.length > 0) || []
+                                  const newStacksText = currentStacks.filter((s: string) => s !== stackItem).join(', ')
+                                  handleSaveStacks(feature, newStacksText)
+                                }}
+                                className="ml-0.5 text-primary/40 hover:text-red-400 focus:outline-none opacity-0 group-hover:opacity-100 transition-opacity"
+                                title="Remove this stack"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {Object.entries(tasksByType).map(([type, tasks]) => {
                   const meta = getTypeMeta(type)
                   const actionBtn = getActionForType(type)
@@ -1312,6 +1417,22 @@ export function PlannerPage() {
                   </div>
                 </div>
               </div>
+
+              {result.detectedNeeds && result.detectedNeeds.trim().length > 0 && (
+                <div className="mt-4 p-3.5 rounded-xl bg-primary/5 border border-primary/10 text-left">
+                  <h4 className="text-xs font-semibold text-primary flex items-center gap-1.5 mb-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    AI-Detected Stack Needs for this Feature
+                  </h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.detectedNeeds.split(',').map((need: string) => (
+                      <span key={need} className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        {need.trim()}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </GlassCard>
 

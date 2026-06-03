@@ -49,7 +49,26 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: (id: n
             <span className="truncate">{project.githubRepoUrl.replace('https://github.com/', '')}</span>
           </div>
         )}
-        <p className="text-xs text-muted-foreground mt-2">
+        {(project.language || project.framework || project.databaseName) && (
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {project.language && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                {project.language} {project.languageVersion && `v${project.languageVersion}`}
+              </span>
+            )}
+            {project.framework && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                {project.framework} {project.frameworkVersion && `v${project.frameworkVersion}`}
+              </span>
+            )}
+            {project.databaseName && project.databaseName !== 'None' && (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+                {project.databaseName} {project.databaseVersion && `v${project.databaseVersion}`}
+              </span>
+            )}
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground mt-2.5">
           Created {new Date(project.createdAt).toLocaleDateString()}
         </p>
       </GlassCard>

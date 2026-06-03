@@ -77,7 +77,7 @@ export function RepositoryBrowser({ projectId, className }: RepositoryBrowserPro
       <div className="flex items-center p-3 border-b bg-muted/20 gap-2 text-sm">
         <HardDrive className="w-4 h-4 text-primary" />
         <span className="font-semibold cursor-pointer hover:text-primary transition-colors" onClick={() => setCurrentPath([])}>
-          Porject Files View
+          Project Files View
         </span>
         {currentPath.map((folder, idx) => (
           <div key={idx} className="flex items-center gap-1 min-w-0">
