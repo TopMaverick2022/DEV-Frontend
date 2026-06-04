@@ -1,99 +1,135 @@
-import { useCallback, useState, useEffect } from 'react'
+import { useCallback, useState, useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
-import ReactFlow, { 
-  Background, 
-  Controls, 
-  MiniMap, 
-  useNodesState, 
-  useEdgesState, 
+import ReactFlow, {
+  Background,
+  Controls,
+  MiniMap,
+  useNodesState,
+  useEdgesState,
   addEdge,
   Connection,
-  Edge
+  Edge,
+  Node,
+  MarkerType,
+  BackgroundVariant,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import { GlassCard } from '@/components/shared/glass-components'
-import { Zap, Save, Download, Plus, Loader2, Sparkles } from 'lucide-react'
+import {
+  Zap, Download, Loader2, Sparkles, Server, Database,
+  ArrowRight, Code2, RefreshCw, Info, BookOpen, FileJson,
+} from 'lucide-react'
 import apiClient from '@/lib/api-client'
 
-const initialNodes = [
-  { 
-    id: '1', 
-    type: 'input', 
-    data: { label: 'API Gateway (Node.js)' }, 
-    position: { x: 250, y: 0 },
-    style: { background: 'rgba(59, 130, 246, 0.2)', color: '#fff', border: '1px solid #3b82f6', borderRadius: '12px', padding: '10px' }
-  },
-  { 
-    id: '2', 
-    data: { label: 'Auth Service (Go)' }, 
-    position: { x: 100, y: 150 },
-    style: { background: 'rgba(255, 255, 255, 0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '10px' }
-  },
-  { 
-    id: '3', 
-    data: { label: 'Project Service (Java)' }, 
-    position: { x: 400, y: 150 },
-    style: { background: 'rgba(255, 255, 255, 0.05)', color: '#fff', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', padding: '10px' }
-  },
-  { 
-    id: '4', 
-    type: 'output', 
-    data: { label: 'PostgreSQL Database' }, 
-    position: { x: 250, y: 300 },
-    style: { background: 'rgba(16, 185, 129, 0.2)', color: '#fff', border: '1px solid #10b981', borderRadius: '12px', padding: '10px' }
-  },
+// ── Types ──────────────────────────────────────────────────────────────────────
+interface ServiceDto  { name: string; description: string; database?: string }
+interface ApiDto      { method: string; endpoint: string; description: string }
+interface EventDto    { name: string; producer: string; consumer: string }
+interface ArchData    { services: ServiceDto[]; apis: ApiDto[]; events: EventDto[] }
+
+// ── Helpers ─────────────────────────────────────────────────────────────────────
+// Colours that work in BOTH light and dark mode (use CSS custom props + fallbacks)
+const SERVICE_COLORS = [
+  { bg: '#3b82f615', border: '#3b82f6', text: '#2563eb' },   // blue
+  { bg: '#8b5cf615', border: '#8b5cf6', text: '#7c3aed' },   // violet
+  { bg: '#10b98115', border: '#10b981', text: '#059669' },   // emerald
+  { bg: '#f5973515', border: '#f59735', text: '#d97706' },   // amber
+  { bg: '#ef444415', border: '#ef4444', text: '#dc2626' },   // red
+  { bg: '#22d3ee15', border: '#22d3ee', text: '#0891b2' },   // cyan
+  { bg: '#ec489915', border: '#ec4899', text: '#db2777' },   // pink
 ]
 
-const initialEdges = [
-  { id: 'e1-2', source: '1', target: '2', animated: true, stroke: '#3b82f6' },
-  { id: 'e1-3', source: '1', target: '3', animated: true, stroke: '#3b82f6' },
-  { id: 'e2-4', source: '2', target: '4', stroke: '#888' },
-  { id: 'e3-4', source: '3', target: '4', stroke: '#888' },
-]
+function buildNodesAndEdges(data: ArchData) {
+  const { services, events } = data
 
+  // ── Lay services out in a grid (max 3 per row) ─────────────────────────────
+  const nodes: Node[] = services.map((srv, i) => {
+    const col = i % 3
+    const row = Math.floor(i / 3)
+    const c = SERVICE_COLORS[i % SERVICE_COLORS.length]
+    return {
+      id: srv.name,
+      data: {
+        label: (
+          <div style={{ textAlign: 'left', minWidth: 120 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: c.text, marginBottom: 2 }}>
+              {srv.name}
+            </div>
+            {srv.database && srv.database !== 'null' && (
+              <div style={{ fontSize: 10, color: '#888', marginTop: 2 }}>
+                📦 {srv.database}
+              </div>
+            )}
+          </div>
+        ),
+        raw: srv,
+        colorIdx: i,
+      },
+      position: { x: col * 280 + 60, y: row * 180 + 60 },
+      style: {
+        background: c.bg,
+        border: `1.5px solid ${c.border}`,
+        borderRadius: 12,
+        padding: '10px 16px',
+        minWidth: 150,
+        cursor: 'pointer',
+      },
+    }
+  })
+
+  // ── Build edges from events ────────────────────────────────────────────────
+  const serviceNames = new Set(services.map(s => s.name))
+  const edges: Edge[] = (events || [])
+    .filter(e => serviceNames.has(e.producer) && serviceNames.has(e.consumer))
+    .map((evt, i) => {
+      const c = SERVICE_COLORS[i % SERVICE_COLORS.length]
+      return {
+        id: `e-${evt.producer}-${evt.consumer}-${i}`,
+        source: evt.producer,
+        target: evt.consumer,
+        label: evt.name,
+        animated: true,
+        labelStyle: { fontSize: 10, fill: '#666' },
+        labelBgStyle: { fill: '#ffffff', fillOpacity: 0.85 },
+        style: { stroke: c.border, strokeWidth: 1.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: c.border },
+      }
+    })
+
+  return { nodes, edges }
+}
+
+// ── Empty state ────────────────────────────────────────────────────────────────
+const emptyNodes: Node[] = []
+const emptyEdges: Edge[] = []
+
+// ── Component ──────────────────────────────────────────────────────────────────
 export function ArchitectureGeneratorPage() {
   const location = useLocation()
-  const initialIdea = location.state?.prompt || ''
-  
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
+  const initialIdea = (location.state as any)?.prompt || ''
+
+  const [nodes, setNodes, onNodesChange] = useNodesState(emptyNodes)
+  const [edges, setEdges, onEdgesChange] = useEdgesState(emptyEdges)
   const [idea, setIdea] = useState(initialIdea)
   const [loading, setLoading] = useState(false)
-  
-  // Track if we auto-generated so we don't do it twice on strict mode
+  const [archData, setArchData] = useState<ArchData | null>(null)
+  const [selectedNode, setSelectedNode] = useState<ServiceDto | null>(null)
   const [hasAutoGenerated, setHasAutoGenerated] = useState(false)
+  const reactFlowWrapper = useRef<HTMLDivElement>(null)
 
+  // ── Generate ────────────────────────────────────────────────────────────────
   const handleGenerate = async (promptOverride?: string) => {
     const finalIdea = typeof promptOverride === 'string' ? promptOverride : idea
-    if (!finalIdea) return
+    if (!finalIdea.trim()) return
     setLoading(true)
+    setSelectedNode(null)
     try {
-      const response = await apiClient.post('/ai/generate-architecture', {
-        idea: finalIdea
-      })
-      
-      const { services, events } = response.data
-      
-      if (services && services.length > 0) {
-        const newNodes = services.map((srv: any, i: number) => ({
-          id: srv.name,
-          data: { label: srv.name + (srv.database && srv.database !== 'null' ? `\n[DB: ${srv.database}]` : '') },
-          position: { x: (i % 3) * 250 + 50, y: Math.floor(i / 3) * 150 + 50 },
-          style: { background: 'rgba(59, 130, 246, 0.2)', color: '#fff', border: '1px solid #3b82f6', borderRadius: '12px', padding: '10px' }
-        }))
-        
-        const newEdges = (events || []).map((evt: any, i: number) => ({
-          id: `e-${evt.producer}-${evt.consumer}-${i}`,
-          source: evt.producer,
-          target: evt.consumer,
-          label: evt.name,
-          animated: true,
-          style: { stroke: '#3b82f6' }
-        }))
-        
-        setNodes(newNodes)
-        setEdges(newEdges)
-      }
+      const response = await apiClient.post('/ai/generate-architecture', { idea: finalIdea })
+      const data: ArchData = response.data
+      setArchData(data)
+      const { nodes: n, edges: e } = buildNodesAndEdges(data)
+      setNodes(n)
+      setEdges(e)
     } catch (error) {
       console.error('Generation failed', error)
     } finally {
@@ -101,111 +137,278 @@ export function ArchitectureGeneratorPage() {
     }
   }
 
+  // ── Auto-trigger if redirected from planner ────────────────────────────────
   useEffect(() => {
     if (initialIdea && !hasAutoGenerated) {
       setHasAutoGenerated(true)
       handleGenerate(initialIdea)
     }
-  }, [initialIdea, hasAutoGenerated])
+  }, [initialIdea]) // eslint-disable-line
 
   const onConnect = useCallback(
-    (params: Connection | Edge) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges]
+    (params: Connection | Edge) => setEdges(eds => addEdge(params, eds)),
+    [setEdges],
   )
 
+  // ── Node click → show properties ───────────────────────────────────────────
+  const onNodeClick = useCallback((_: any, node: Node) => {
+    setSelectedNode((node.data as any).raw ?? null)
+  }, [])
+
+  // ── Download diagram as JSON ────────────────────────────────────────────────
+  const handleDownload = () => {
+    if (!archData) return
+    const blob = new Blob([JSON.stringify(archData, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'architecture.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // ── Build flow explanation text ─────────────────────────────────────────────
+  const flowExplanation = archData?.events?.map(
+    (e, i) => `${i + 1}. ${e.producer} → ${e.consumer}: ${e.name}`
+  ) ?? []
+
+  // ── Stats ───────────────────────────────────────────────────────────────────
+  const stats = archData ? [
+    { label: 'Services', value: archData.services.length, icon: <Server className="w-3.5 h-3.5" /> },
+    { label: 'APIs', value: archData.apis.length, icon: <Code2 className="w-3.5 h-3.5" /> },
+    { label: 'Event Flows', value: archData.events.length, icon: <ArrowRight className="w-3.5 h-3.5" /> },
+  ] : []
+
   return (
-    <div className="h-[calc(100vh-180px)] space-y-4">
-      <div className="flex items-center justify-between">
-        <div className="flex-1 max-w-2xl">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">AI Architecture Generator</h1>
-          <div className="mt-2 flex gap-2">
-            <input 
-              type="text"
-              value={idea}
-              onChange={(e) => setIdea(e.target.value)}
-              placeholder="e.g., Build a real-time chat system with microservices"
-              className="flex-1 bg-background/50 border border-white/10 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground"
-            />
-          </div>
+    <div className="flex flex-col gap-4 h-[calc(100vh-80px)]">
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold tracking-tight">AI Architecture Generator</h1>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Describe your system and AI will generate an interactive architecture diagram.
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={handleGenerate}
-            disabled={loading || !idea}
-            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 shadow-lg shadow-primary/25 hover:opacity-90 disabled:opacity-50"
+
+        {archData && (
+          <div className="flex items-center gap-3">
+            {stats.map(s => (
+              <div key={s.label} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full border border-border bg-muted/30">
+                {s.icon}
+                <span className="text-muted-foreground">{s.label}:</span>
+                <span>{s.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleDownload}
+            disabled={!archData}
+            title="Download as JSON"
+            className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border text-sm font-medium hover:bg-muted/50 disabled:opacity-40 transition-colors"
           >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Generate
+            <FileJson className="w-4 h-4" /> Export JSON
           </button>
-          <button className="glass px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 hover:bg-white/10">
-            <Save className="w-4 h-4" /> Save
+          <button
+            onClick={() => handleGenerate()}
+            disabled={loading || !idea.trim()}
+            className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 shadow-lg shadow-primary/25 hover:opacity-90 disabled:opacity-50 transition-all"
+          >
+            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            {loading ? 'Generating…' : 'Generate'}
           </button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
-        <GlassCard className="lg:col-span-3 p-0 overflow-hidden relative border-white/5">
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            fitView
-            className="dark"
+      {/* ── Prompt Input ───────────────────────────────────────────────────── */}
+      <div className="flex gap-2">
+        <textarea
+          value={idea}
+          onChange={e => setIdea(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleGenerate() } }}
+          placeholder="Describe your system, e.g. 'E-commerce platform with microservices: Auth, Product Catalog, Cart, Orders, Payment, Notifications'  (Enter to generate)"
+          rows={2}
+          className="flex-1 bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary text-foreground resize-none"
+        />
+        {archData && (
+          <button
+            onClick={() => { setArchData(null); setNodes([]); setEdges([]); setIdea(''); setSelectedNode(null) }}
+            title="Clear"
+            className="self-start p-2.5 rounded-xl border border-border hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
           >
-            <Background color="#333" gap={20} />
-            <Controls />
-            <MiniMap 
-              nodeColor={() => 'rgba(255,255,255,0.1)'} 
-              maskColor="rgba(0,0,0,0.5)"
-              style={{ backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: '12px' }}
-            />
-          </ReactFlow>
-          
-          <div className="absolute top-4 right-4 flex flex-col gap-2">
-            <button className="p-2 glass rounded-lg hover:bg-white/10 transition-colors"><Plus className="w-4 h-4" /></button>
-            <button className="p-2 glass rounded-lg hover:bg-white/10 transition-colors"><Download className="w-4 h-4" /></button>
+            <RefreshCw className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+
+      {/* ── Main Canvas Area ──────────────────────────────────────────────── */}
+      {loading ? (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-muted/10">
+          <Loader2 className="w-10 h-10 animate-spin text-primary" />
+          <p className="text-sm font-medium text-muted-foreground">AI is designing your architecture…</p>
+        </div>
+      ) : !archData ? (
+        /* ── Empty / hint state ─────────────────────────────────────────── */
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-border bg-muted/10 text-muted-foreground">
+          <div className="p-4 rounded-2xl bg-primary/10 border border-primary/20">
+            <Sparkles className="w-8 h-8 text-primary" />
           </div>
-        </GlassCard>
+          <div className="text-center space-y-1">
+            <p className="font-semibold text-foreground">No architecture yet</p>
+            <p className="text-xs">Describe your system above and click <strong>Generate</strong>.</p>
+            <p className="text-xs opacity-70 mt-2">Or come here from the Planner — the plan is auto-filled and generated for you.</p>
+          </div>
+        </div>
+      ) : (
+        /* ── Diagram + panels ─────────────────────────────────────────────── */
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-4 gap-4 min-h-0">
 
-        <div className="space-y-6 overflow-y-auto">
-          <GlassCard>
-            <h3 className="text-lg font-bold mb-4">Properties</h3>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">Select Component</label>
-                <div className="p-3 bg-muted rounded-lg text-sm">API Gateway (Node.js)</div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">Runtime</label>
-                <div className="p-3 bg-muted rounded-lg text-sm">Node.js v20.x</div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs text-muted-foreground">Auto-Scale</label>
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-5 bg-primary rounded-full relative">
-                    <div className="absolute right-1 top-1 w-3 h-3 bg-white rounded-full" />
-                  </div>
-                  <span className="text-sm">Enabled</span>
-                </div>
-              </div>
-            </div>
-          </GlassCard>
+          {/* ReactFlow */}
+          <div ref={reactFlowWrapper} className="lg:col-span-3 rounded-2xl border border-border overflow-hidden relative min-h-[420px]">
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onNodeClick={onNodeClick}
+              fitView
+              fitViewOptions={{ padding: 0.25 }}
+            >
+              <Background variant={BackgroundVariant.Dots} color="var(--border, #e5e7eb)" gap={20} />
+              <Controls />
+              <MiniMap
+                nodeColor={n => {
+                  const c = SERVICE_COLORS[(n.data?.colorIdx ?? 0) % SERVICE_COLORS.length]
+                  return c.border
+                }}
+                maskColor="rgba(0,0,0,0.15)"
+                style={{ borderRadius: 8 }}
+              />
+            </ReactFlow>
 
-          <GlassCard className="bg-primary/5 border-primary/20">
-            <div className="flex items-center gap-2 mb-3">
-              <Zap className="text-primary w-4 h-4" />
-              <h3 className="text-sm font-bold">AI Suggestion</h3>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Based on your current traffic patterns, I suggest adding a Redis cache layer between the API Gateway and the PostGreSQL database to reduce latency by approx 45%.
-            </p>
-            <button className="w-full mt-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-medium">
-              Apply Suggestion
+            {/* Floating download inside canvas */}
+            <button
+              onClick={handleDownload}
+              title="Export JSON"
+              className="absolute bottom-16 right-4 p-2 rounded-lg bg-background border border-border shadow-md hover:bg-muted transition-colors"
+            >
+              <Download className="w-4 h-4 text-muted-foreground" />
             </button>
-          </GlassCard>
+          </div>
+
+          {/* Right Panel */}
+          <div className="flex flex-col gap-4 overflow-y-auto">
+
+            {/* Properties panel — shows selected node or a hint */}
+            <GlassCard className="shrink-0">
+              <div className="flex items-center gap-2 mb-3">
+                <Info className="w-4 h-4 text-primary" />
+                <h3 className="text-sm font-bold">
+                  {selectedNode ? 'Service Details' : 'Properties'}
+                </h3>
+              </div>
+              {selectedNode ? (
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Name</p>
+                    <p className="text-sm font-bold text-foreground">{selectedNode.name}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-0.5">Role</p>
+                    <p className="text-xs text-foreground/80 leading-relaxed">{selectedNode.description}</p>
+                  </div>
+                  {selectedNode.database && selectedNode.database !== 'null' && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                      <Database className="w-3.5 h-3.5 text-emerald-500" />
+                      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">{selectedNode.database}</span>
+                    </div>
+                  )}
+                  {/* Which events involve this service */}
+                  {archData && (
+                    <>
+                      {archData.events.filter(e => e.producer === selectedNode.name || e.consumer === selectedNode.name).length > 0 && (
+                        <div>
+                          <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1">Connected Events</p>
+                          <div className="space-y-1">
+                            {archData.events
+                              .filter(e => e.producer === selectedNode.name || e.consumer === selectedNode.name)
+                              .map((e, i) => (
+                                <div key={i} className="text-[10px] flex items-center gap-1.5 text-muted-foreground">
+                                  <ArrowRight className="w-3 h-3 shrink-0" />
+                                  <span className="font-medium">{e.name}</span>
+                                  <span className="opacity-60">{e.producer === selectedNode.name ? '(sends)' : '(receives)'}</span>
+                                </div>
+                              ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Click any node in the diagram to see its service description, database, and connected event flows.
+                </p>
+              )}
+            </GlassCard>
+
+            {/* API Endpoints panel — real data */}
+            <GlassCard className="shrink-0">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-4 h-4 text-amber-500" />
+                <h3 className="text-sm font-bold">API Endpoints</h3>
+              </div>
+              {archData && archData.apis.length > 0 ? (
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                  {archData.apis.map((api, i) => (
+                    <div key={i} className="p-2 rounded-lg border border-border bg-muted/20">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded font-mono ${
+                          api.method === 'GET' ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' :
+                          api.method === 'POST' ? 'bg-blue-500/20 text-blue-600 dark:text-blue-400' :
+                          api.method === 'PUT' ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' :
+                          'bg-red-500/20 text-red-600 dark:text-red-400'
+                        }`}>{api.method}</span>
+                        <span className="text-[10px] font-mono text-foreground/80 truncate">{api.endpoint}</span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-snug">{api.description}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Generate an architecture to see API endpoints.</p>
+              )}
+            </GlassCard>
+
+            {/* Flow Explanation panel */}
+            <GlassCard className="shrink-0">
+              <div className="flex items-center gap-2 mb-3">
+                <BookOpen className="w-4 h-4 text-violet-500" />
+                <h3 className="text-sm font-bold">Flow Explanation</h3>
+              </div>
+              {flowExplanation.length > 0 ? (
+                <div className="space-y-1.5 max-h-52 overflow-y-auto pr-1">
+                  {flowExplanation.map((line, i) => (
+                    <div key={i} className="flex items-start gap-2 text-[11px] text-muted-foreground leading-relaxed">
+                      <ArrowRight className="w-3 h-3 shrink-0 mt-0.5 text-primary" />
+                      <span>{line}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  After generation, the step-by-step data flow between all services will appear here.
+                </p>
+              )}
+            </GlassCard>
+
+          </div>
         </div>
-      </div>
+      )}
     </div>
   )
 }
