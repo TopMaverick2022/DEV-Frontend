@@ -67,6 +67,7 @@ const TYPE_META: Record<string, { icon: React.ReactNode; color: string; bg: stri
   DevOps:        { icon: <Zap className="w-3.5 h-3.5" />,        color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20' },
   Architecture:  { icon: <Layers className="w-3.5 h-3.5" />,     color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/20' },
   Database:      { icon: <Database className="w-3.5 h-3.5" />,   color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  Development:   { icon: <Code2 className="w-3.5 h-3.5" />,      color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10 border-fuchsia-500/20' },
 }
 
 const PRIORITY_META: Record<string, { color: string; dot: string }> = {
@@ -115,14 +116,28 @@ function getSvgIconForType(type: string) {
   if (t === 'architecture') {
     return `<svg class="category-icon" style="color:#818cf8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>`
   }
+  if (t === 'development') {
+    return `<svg class="category-icon" style="color:#e879f9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`
+  }
   if (t === 'database') {
     return `<svg class="category-icon" style="color:#34d399" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>`
   }
   return `<svg class="category-icon" style="color:#94a3b8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`
 }
 
+function getDetectedNeedsArray(val: any): string[] {
+  if (!val) return []
+  if (Array.isArray(val)) {
+    return val.map(v => String(v).trim()).filter(Boolean)
+  }
+  if (typeof val === 'string') {
+    return val.split(',').map(v => v.trim()).filter(Boolean)
+  }
+  return []
+}
+
 function handleDownloadGlobalPlan(feature: any) {
-  const tasksByType = feature.tasks.reduce((acc: any, t: any) => {
+  const tasksByType = (feature?.tasks || []).reduce((acc: any, t: any) => {
     const key = t.type || 'Other'
     acc[key] = [...(acc[key] ?? []), t]
     return acc
@@ -328,7 +343,7 @@ function handleDownloadGlobalPlan(feature: any) {
 
 function getActionForType(type: string) {
   const t = type.toLowerCase()
-  if (t === 'backend' || t === 'frontend' || t === 'devops' || t === 'testing') {
+  if (t === 'backend' || t === 'frontend' || t === 'devops' || t === 'testing' || t === 'development') {
     return { label: 'Implement Code with AI', action: 'implement_code', icon: <Wand2 className="w-3.5 h-3.5" /> }
   }
   if (t === 'documentation' || t === 'document') {
@@ -550,7 +565,7 @@ function SavedPlansSection({
         const isOpen = expandedId === feature.id
         const isEditingThisFeature = editingFeatureId === feature.id
         const complexityMeta = COMPLEXITY_META[feature.complexity] ?? { color: 'text-slate-400', icon: null }
-        const tasksByType = feature.tasks.reduce<Record<string, typeof feature.tasks>>((acc, t) => {
+        const tasksByType = (feature.tasks || []).reduce<Record<string, typeof feature.tasks>>((acc, t) => {
           const key = t.type || 'Other'
           acc[key] = [...(acc[key] ?? []), t]
           return acc
@@ -604,7 +619,7 @@ function SavedPlansSection({
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">{feature.featureName || feature.name}</p>
-                    <p className="text-xs text-muted-foreground">{feature.tasks.length} tasks</p>
+                    <p className="text-xs text-muted-foreground">{(feature.tasks || []).length} tasks</p>
                   </div>
                 </div>
               )}
@@ -665,7 +680,7 @@ function SavedPlansSection({
             {/* Expanded task list */}
             {isOpen && (
               <div className="px-4 pb-4 pt-3 space-y-4 border-t border-border/40 animate-in fade-in slide-in-from-top-2 duration-200">
-                {((feature.detectedNeeds?.trim().length ?? 0) > 0 || editingStacksId === feature.id) && (
+                {(getDetectedNeedsArray(feature.detectedNeeds).length > 0 || editingStacksId === feature.id) && (
                   <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/10 text-left">
                     <div className="flex items-center justify-between mb-1.5">
                       <h4 className="text-xs font-semibold text-primary flex items-center gap-1.5">
@@ -677,7 +692,7 @@ function SavedPlansSection({
                           onClick={(e) => {
                             e.stopPropagation()
                             setEditingStacksId(feature.id)
-                            setEditStacksText(feature.detectedNeeds || '')
+                            setEditStacksText(Array.isArray(feature.detectedNeeds) ? feature.detectedNeeds.join(', ') : feature.detectedNeeds || '')
                           }}
                           className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-primary transition-colors"
                           title="Edit Stacks"
@@ -710,15 +725,15 @@ function SavedPlansSection({
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-1.5">
-                        {feature.detectedNeeds?.split(',').filter((n: string) => n.trim().length > 0).map((need: string, i: number) => {
-                          const stackItem = need.trim()
+                        {getDetectedNeedsArray(feature.detectedNeeds).map((need: string, i: number) => {
+                          const stackItem = need
                           return (
                             <span key={i} className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 flex items-center gap-1 group">
                               {stackItem}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  const currentStacks = feature.detectedNeeds?.split(',').map((n: string) => n.trim()).filter((n: string) => n.length > 0) || []
+                                  const currentStacks = getDetectedNeedsArray(feature.detectedNeeds)
                                   const newStacksText = currentStacks.filter((s: string) => s !== stackItem).join(', ')
                                   handleSaveStacks(feature, newStacksText)
                                 }}
@@ -734,6 +749,29 @@ function SavedPlansSection({
                     )}
                   </div>
                 )}
+
+                {/* Main Action Bar for AI Implementation */}
+                <div className="flex items-center justify-between pb-3 border-b border-border/20">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-purple-500 animate-pulse"></span>
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider text-[10px]">AI Code Implementation</span>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      onImplementType(feature.id, feature.featureName || feature.name || '', 'All')
+                    }}
+                    disabled={implementingType === 'All'}
+                    className="flex items-center gap-1.5 px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-600/25 active:scale-95 disabled:opacity-50"
+                  >
+                    {implementingType === 'All' ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Wand2 className="w-3.5 h-3.5" />
+                    )}
+                    {implementingType === 'All' ? 'Implementing Plan...' : 'Implement Plan with AI'}
+                  </button>
+                </div>
                 {Object.entries(tasksByType).map(([type, tasks]) => {
                   const meta = getTypeMeta(type)
                   const actionBtn = getActionForType(type)
@@ -749,7 +787,12 @@ function SavedPlansSection({
                           <button
                             onClick={() => {
                               if (actionBtn.action === 'navigate') {
-                                navigate(actionBtn.to as string)
+                                if (actionBtn.to === '/architecture') {
+                                  const prompt = tasks.map((t: any) => `${t.title}: ${t.description}`).join('\n')
+                                  navigate(actionBtn.to as string, { state: { prompt } })
+                                } else {
+                                  navigate(actionBtn.to as string)
+                                }
                               } else if (actionBtn.action === 'implement_code' && feature.id) {
                                 onImplementType(feature.id, feature.featureName || feature.name || '', type)
                               } else if (actionBtn.action === 'view_report') {
@@ -988,7 +1031,7 @@ export function PlannerPage() {
       })
       setResult(prev => {
         if (!prev) return null
-        const updatedTasks = prev.tasks.map(t => t.id === taskId ? { ...t, title: editTaskTitle, description: editTaskDesc, estimatedHours: editTaskHours, priority: editTaskPriority } : t)
+        const updatedTasks = (prev.tasks || []).map(t => t.id === taskId ? { ...t, title: editTaskTitle, description: editTaskDesc, estimatedHours: editTaskHours, priority: editTaskPriority } : t)
         const totalHours = updatedTasks.reduce((sum, t) => sum + (t.estimatedHours || 0), 0)
         return { ...prev, tasks: updatedTasks, totalEstimatedHours: totalHours }
       })
@@ -1391,7 +1434,7 @@ export function PlannerPage() {
                 </div>
               )}
 
-              <div className="flex flex-wrap gap-3">
+              <div className="flex flex-wrap gap-3 items-center">
                 {/* Complexity */}
                 <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-background/60 border border-border">
                   <BarChart3 className={`w-4 h-4 ${complexityMeta?.color}`} />
@@ -1413,21 +1456,31 @@ export function PlannerPage() {
                   <FolderKanban className="w-4 h-4 text-violet-400" />
                   <div>
                     <p className="text-xs text-muted-foreground">Tasks</p>
-                    <p className="text-sm font-bold text-foreground">{result.tasks.length}</p>
+                    <p className="text-sm font-bold text-foreground">{result.tasks?.length || 0}</p>
                   </div>
                 </div>
+
+                {/* Implement Plan Button */}
+                <button
+                  onClick={() => handleAiImplementType(result.featureId, result.featureName || result.name || '', 'All')}
+                  disabled={implementingType === 'All'}
+                  className="flex items-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-600/25 active:scale-95 disabled:opacity-50 h-[46px]"
+                >
+                  {implementingType === 'All' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+                  {implementingType === 'All' ? 'Implementing Plan...' : 'Implement Plan with AI'}
+                </button>
               </div>
 
-              {result.detectedNeeds && result.detectedNeeds.trim().length > 0 && (
-                <div className="mt-4 p-3.5 rounded-xl bg-primary/5 border border-primary/10 text-left">
+              {getDetectedNeedsArray(result.detectedNeeds).length > 0 && (
+                <div className="mt-4 p-3.5 rounded-xl bg-primary/5 border border-primary/10 text-left w-full">
                   <h4 className="text-xs font-semibold text-primary flex items-center gap-1.5 mb-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-primary" />
                     AI-Detected Stack Needs for this Feature
                   </h4>
                   <div className="flex flex-wrap gap-1.5">
-                    {result.detectedNeeds.split(',').map((need: string) => (
-                      <span key={need} className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
-                        {need.trim()}
+                    {getDetectedNeedsArray(result.detectedNeeds).map((need: string, i: number) => (
+                      <span key={i} className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        {need}
                       </span>
                     ))}
                   </div>

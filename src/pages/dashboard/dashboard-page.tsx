@@ -783,6 +783,7 @@ const TASK_TYPE_META: Record<string, { icon: React.ReactNode; color: string; bg:
   DevOps:        { icon: <Zap className="w-3 h-3" />,        color: 'text-cyan-400',   bg: 'bg-cyan-500/10 border-cyan-500/20' },
   Architecture:  { icon: <Layers className="w-3 h-3" />,     color: 'text-indigo-400', bg: 'bg-indigo-500/10 border-indigo-500/20' },
   Database:      { icon: <Database className="w-3 h-3" />,   color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  Development:   { icon: <Code className="w-3 h-3" />,       color: 'text-fuchsia-400', bg: 'bg-fuchsia-500/10 border-fuchsia-500/20' },
 }
 
 const TASK_PRIORITY_META: Record<string, { color: string; dot: string }> = {
@@ -830,6 +831,9 @@ function getSvgIconForType(type: string) {
   }
   if (t === 'architecture') {
     return `<svg class="category-icon" style="color:#818cf8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>`
+  }
+  if (t === 'development') {
+    return `<svg class="category-icon" style="color:#e879f9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>`
   }
   if (t === 'database') {
     return `<svg class="category-icon" style="color:#34d399" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path><path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"></path></svg>`
@@ -1044,7 +1048,7 @@ function handleDownloadGlobalPlan(feature: any) {
 
 function getActionForType(type: string) {
   const t = type.toLowerCase()
-  if (t === 'backend' || t === 'frontend' || t === 'devops' || t === 'testing') {
+  if (t === 'backend' || t === 'frontend' || t === 'devops' || t === 'testing' || t === 'development') {
     return { label: 'Implement Code with AI', action: 'implement_code', icon: <Wand2 className="w-3.5 h-3.5" /> }
   }
   if (t === 'documentation' || t === 'document') {
@@ -1404,7 +1408,12 @@ function ProjectPlansTab({ project }: { project: Project | null }) {
                           <button
                             onClick={() => {
                               if (actionBtn.action === 'navigate') {
-                                navigate(actionBtn.to as string)
+                                if (actionBtn.to === '/architecture') {
+                                  const prompt = tasks.map((t: any) => `${t.title}: ${t.description}`).join('\n')
+                                  navigate(actionBtn.to as string, { state: { prompt } })
+                                } else {
+                                  navigate(actionBtn.to as string)
+                                }
                               } else if (actionBtn.action === 'implement_code' && feature.id) {
                                 handleAiImplementType(feature.id, feature.featureName || feature.name, type)
                               } else if (actionBtn.action === 'view_report') {
