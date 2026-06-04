@@ -23,7 +23,7 @@ import {
   Image as ImageIcon, FileText, ChevronDown, GitBranch,
 } from 'lucide-react'
 import apiClient from '@/lib/api-client'
-import html2canvas from 'html2canvas'
+import { toPng, toJpeg, toBlob } from 'html-to-image'
 import jsPDF from 'jspdf'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -164,24 +164,44 @@ function buildNodesAndEdges(data: ArchData) {
 }
 
 // ── Export ────────────────────────────────────────────────────────────────────
+// html-to-image is used instead of html2canvas because html2canvas does not
+// support the oklch() CSS color function used by Tailwind CSS v4.
 type ExportFormat = 'png' | 'jpeg' | 'webp' | 'pdf'
 
+const EXPORT_OPTS = {
+  backgroundColor: '#0f172a',
+  pixelRatio: 2,
+  skipFonts: false,
+}
+
 async function exportDiagram(el: HTMLElement, format: ExportFormat, filename = 'architecture') {
-  const canvas = await html2canvas(el, { backgroundColor: '#0f172a', scale: 2, useCORS: true, logging: false })
   if (format === 'pdf') {
+    const dataUrl = await toPng(el, EXPORT_OPTS)
+    const img = new Image()
+    img.src = dataUrl
+    await new Promise(r => { img.onload = r })
     const pdf = new jsPDF({
-      orientation: canvas.width > canvas.height ? 'landscape' : 'portrait',
+      orientation: img.width > img.height ? 'landscape' : 'portrait',
       unit: 'px',
-      format: [canvas.width / 2, canvas.height / 2],
+      format: [img.width / 2, img.height / 2],
     })
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, canvas.width / 2, canvas.height / 2)
+    pdf.addImage(dataUrl, 'PNG', 0, 0, img.width / 2, img.height / 2)
     pdf.save(`${filename}.pdf`)
     return
   }
-  const mime = format === 'jpeg' ? 'image/jpeg' : format === 'webp' ? 'image/webp' : 'image/png'
-  const dataUrl = canvas.toDataURL(mime, 0.92)
+
+  let dataUrl: string
+  if (format === 'jpeg') {
+    dataUrl = await toJpeg(el, { ...EXPORT_OPTS, quality: 0.92 })
+  } else {
+    // png and webp both use toPng (browsers convert webp natively)
+    dataUrl = await toPng(el, EXPORT_OPTS)
+  }
+
   const a = document.createElement('a')
-  a.href = dataUrl; a.download = `${filename}.${format}`; a.click()
+  a.href = dataUrl
+  a.download = `${filename}.${format}`
+  a.click()
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
