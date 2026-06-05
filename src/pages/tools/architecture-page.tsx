@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom'
 import ReactFlow, {
   Background,
   Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   addEdge,
@@ -23,7 +22,7 @@ import {
   Image as ImageIcon, FileText, ChevronDown, GitBranch,
 } from 'lucide-react'
 import apiClient from '@/lib/api-client'
-import { toPng, toJpeg, toBlob } from 'html-to-image'
+import { toPng, toJpeg } from 'html-to-image'
 import jsPDF from 'jspdf'
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -163,10 +162,266 @@ function buildNodesAndEdges(data: ArchData) {
   return { nodes, edges }
 }
 
-// ── Export ────────────────────────────────────────────────────────────────────
-// html-to-image is used instead of html2canvas because html2canvas does not
-// support the oklch() CSS color function used by Tailwind CSS v4.
-type ExportFormat = 'png' | 'jpeg' | 'webp' | 'pdf'
+// ── Method colour helper ─────────────────────────────────────────────────────
+function methodColor(method: string) {
+  switch (method) {
+    case 'GET':    return '#10b981'
+    case 'POST':   return '#3b82f6'
+    case 'PUT':    return '#f59735'
+    case 'PATCH':  return '#a855f7'
+    default:       return '#f43646'
+  }
+}
+
+// ── PDF Export (diagram + full text data) ────────────────────────────────────
+async function exportFullPdf(
+  diagramEl: HTMLElement,
+  archData: ArchData,
+  filename = 'architecture',
+) {
+  // 1. Capture the diagram as PNG
+  const diagramDataUrl = await toPng(diagramEl, {
+    backgroundColor: '#0f172a',
+    pixelRatio: 2,
+    skipFonts: false,
+  })
+  const diagramImg = new Image()
+  diagramImg.src = diagramDataUrl
+  await new Promise(r => { diagramImg.onload = r })
+
+  // A4 landscape dimensions in px (72dpi for jsPDF 'pt' mode)
+  const pageW = 841.89 // A4 landscape width  (pt)
+  const pageH = 595.28 // A4 landscape height (pt)
+  const margin = 36
+  const contentW = pageW - margin * 2
+
+  const pdf = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' })
+
+  // ── Page 1: Diagram ──────────────────────────────────────────────────────
+  // Dark background
+  pdf.setFillColor(15, 23, 42)
+  pdf.rect(0, 0, pageW, pageH, 'F')
+
+  // Title
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(18)
+  pdf.setTextColor(248, 250, 252)
+  pdf.text('AI Architecture Diagram', margin, margin + 14)
+
+  // Stats line
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(148, 163, 184)
+  pdf.text(
+    `Services: ${archData.services.length}   •   API Endpoints: ${archData.apis.length}   •   Event Flows: ${archData.events.length}`,
+    margin, margin + 28,
+  )
+
+  // Diagram image
+  const diagramY = margin + 40
+  const maxDiagramH = pageH - diagramY - margin
+  const aspect = diagramImg.naturalWidth / diagramImg.naturalHeight
+  let dW = contentW
+  let dH = dW / aspect
+  if (dH > maxDiagramH) { dH = maxDiagramH; dW = dH * aspect }
+  const dX = margin + (contentW - dW) / 2
+  pdf.addImage(diagramDataUrl, 'PNG', dX, diagramY, dW, dH)
+
+  // ── Page 2: Service Details ──────────────────────────────────────────────
+  pdf.addPage()
+  pdf.setFillColor(15, 23, 42)
+  pdf.rect(0, 0, pageW, pageH, 'F')
+
+  let curY = margin + 16
+
+  // Section title
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(14)
+  pdf.setTextColor(248, 250, 252)
+  pdf.text('Service Details', margin, curY)
+  curY += 20
+
+  const colW = (contentW - 12) / 2
+  let col = 0
+  let colY = curY
+
+  for (const svc of archData.services) {
+    const xOff = margin + col * (colW + 12)
+
+    // Card background
+    pdf.setFillColor(30, 41, 59)
+    pdf.setDrawColor(51, 65, 85)
+    pdf.roundedRect(xOff, colY, colW, 56, 4, 4, 'FD')
+
+    // Service name
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(9)
+    pdf.setTextColor(248, 250, 252)
+    pdf.text(svc.name, xOff + 8, colY + 13)
+
+    // Description — wrapped
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(7.5)
+    pdf.setTextColor(148, 163, 184)
+    const lines = pdf.splitTextToSize(svc.description, colW - 16)
+    pdf.text(lines.slice(0, 2), xOff + 8, colY + 24)
+
+    // Database badge
+    if (svc.database && !['null', 'None', 'none', 'N/A'].includes(svc.database)) {
+      pdf.setFillColor(16, 185, 129, 0.15)
+      pdf.setDrawColor(16, 185, 129)
+      pdf.roundedRect(xOff + 8, colY + 42, colW - 16, 10, 2, 2, 'FD')
+      pdf.setFont('helvetica', 'bold')
+      pdf.setFontSize(6.5)
+      pdf.setTextColor(16, 185, 129)
+      pdf.text(`DB: ${svc.database}`, xOff + 12, colY + 49)
+    }
+
+    colY += 64
+
+    // Switch columns if near bottom
+    if (colY + 64 > pageH - margin) {
+      col++
+      colY = curY
+      if (col > 1) {
+        pdf.addPage()
+        pdf.setFillColor(15, 23, 42)
+        pdf.rect(0, 0, pageW, pageH, 'F')
+        curY = margin + 16
+        colY = curY
+        col = 0
+      }
+    }
+  }
+
+  // ── Page 3: API Endpoints ────────────────────────────────────────────────
+  pdf.addPage()
+  pdf.setFillColor(15, 23, 42)
+  pdf.rect(0, 0, pageW, pageH, 'F')
+
+  curY = margin + 16
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(14)
+  pdf.setTextColor(248, 250, 252)
+  pdf.text('API Endpoints', margin, curY)
+  curY += 20
+
+  // Table header
+  const colWidths = [60, 180, contentW - 60 - 180 - 8]
+  const headers = ['Method', 'Endpoint', 'Description']
+  let tableX = margin
+  pdf.setFillColor(30, 41, 59)
+  pdf.rect(tableX, curY, contentW, 14, 'F')
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(7)
+  pdf.setTextColor(148, 163, 184)
+  let hx = tableX + 6
+  headers.forEach((h, i) => {
+    pdf.text(h, hx, curY + 9)
+    hx += colWidths[i] + 4
+  })
+  curY += 18
+
+  for (const api of archData.apis) {
+    if (curY + 18 > pageH - margin) {
+      pdf.addPage()
+      pdf.setFillColor(15, 23, 42)
+      pdf.rect(0, 0, pageW, pageH, 'F')
+      curY = margin + 10
+    }
+
+    const rowH = 16
+    pdf.setFillColor(22, 32, 48)
+    pdf.setDrawColor(51, 65, 85)
+    pdf.rect(margin, curY, contentW, rowH, 'FD')
+
+    // Method badge
+    const mc = methodColor(api.method)
+    const rgb = parseInt(mc.slice(1), 16)
+    pdf.setFillColor((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff, 0.2)
+    pdf.roundedRect(margin + 4, curY + 3, 48, 10, 2, 2, 'F')
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(6.5)
+    pdf.setTextColor((rgb >> 16) & 0xff, (rgb >> 8) & 0xff, rgb & 0xff)
+    pdf.text(api.method, margin + 4 + 24 - pdf.getTextWidth(api.method) / 2, curY + 10)
+
+    // Endpoint
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(7)
+    pdf.setTextColor(200, 210, 230)
+    pdf.text(api.endpoint, margin + colWidths[0] + 8, curY + 10, { maxWidth: colWidths[1] })
+
+    // Description
+    pdf.setTextColor(148, 163, 184)
+    const descX = margin + colWidths[0] + colWidths[1] + 12
+    pdf.text(api.description, descX, curY + 10, { maxWidth: colWidths[2] - 4 })
+
+    curY += rowH + 2
+  }
+
+  // ── Page 4: Flow Explanation ─────────────────────────────────────────────
+  pdf.addPage()
+  pdf.setFillColor(15, 23, 42)
+  pdf.rect(0, 0, pageW, pageH, 'F')
+
+  curY = margin + 16
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(14)
+  pdf.setTextColor(248, 250, 252)
+  pdf.text('Flow Explanation', margin, curY)
+  curY += 20
+
+  archData.events.forEach((evt, idx) => {
+    if (curY + 28 > pageH - margin) {
+      pdf.addPage()
+      pdf.setFillColor(15, 23, 42)
+      pdf.rect(0, 0, pageW, pageH, 'F')
+      curY = margin + 16
+    }
+
+    // Step number circle bg
+    pdf.setFillColor(139, 92, 246, 0.15)
+    pdf.setDrawColor(139, 92, 246)
+    pdf.circle(margin + 8, curY + 8, 8, 'FD')
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(7)
+    pdf.setTextColor(139, 92, 246)
+    const label = String(idx + 1)
+    pdf.text(label, margin + 8 - pdf.getTextWidth(label) / 2, curY + 11)
+
+    // Row background
+    pdf.setFillColor(30, 41, 59)
+    pdf.setDrawColor(51, 65, 85)
+    pdf.roundedRect(margin + 20, curY, contentW - 20, 22, 3, 3, 'FD')
+
+    // Producer → consumer
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(8)
+    pdf.setTextColor(248, 250, 252)
+    pdf.text(evt.producer, margin + 28, curY + 9)
+    pdf.setTextColor(99, 102, 241)
+    pdf.text('→', margin + 28 + pdf.getTextWidth(evt.producer) + 4, curY + 9)
+    pdf.setTextColor(248, 250, 252)
+    const arrowW = pdf.getTextWidth('→')
+    pdf.text(evt.consumer, margin + 28 + pdf.getTextWidth(evt.producer) + 4 + arrowW + 4, curY + 9)
+
+    // Event name
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(7)
+    pdf.setTextColor(148, 163, 184)
+    pdf.text(evt.name, margin + 28, curY + 18)
+
+    curY += 28
+  })
+
+  pdf.save(`${filename}.pdf`)
+}
+
+// ── Export (diagram only) ────────────────────────────────────────────────────
+type ExportFormat = 'png' | 'jpeg' | 'webp'
 
 const EXPORT_OPTS = {
   backgroundColor: '#0f172a',
@@ -174,30 +429,13 @@ const EXPORT_OPTS = {
   skipFonts: false,
 }
 
-async function exportDiagram(el: HTMLElement, format: ExportFormat, filename = 'architecture') {
-  if (format === 'pdf') {
-    const dataUrl = await toPng(el, EXPORT_OPTS)
-    const img = new Image()
-    img.src = dataUrl
-    await new Promise(r => { img.onload = r })
-    const pdf = new jsPDF({
-      orientation: img.width > img.height ? 'landscape' : 'portrait',
-      unit: 'px',
-      format: [img.width / 2, img.height / 2],
-    })
-    pdf.addImage(dataUrl, 'PNG', 0, 0, img.width / 2, img.height / 2)
-    pdf.save(`${filename}.pdf`)
-    return
-  }
-
+async function exportDiagramImage(el: HTMLElement, format: ExportFormat, filename = 'architecture') {
   let dataUrl: string
   if (format === 'jpeg') {
     dataUrl = await toJpeg(el, { ...EXPORT_OPTS, quality: 0.92 })
   } else {
-    // png and webp both use toPng (browsers convert webp natively)
     dataUrl = await toPng(el, EXPORT_OPTS)
   }
-
   const a = document.createElement('a')
   a.href = dataUrl
   a.download = `${filename}.${format}`
@@ -256,7 +494,13 @@ export function ArchitectureGeneratorPage() {
   const handleExport = async (fmt: ExportFormat) => {
     if (!canvasRef.current) return
     setExporting(true); setExportOpen(false)
-    try { await exportDiagram(canvasRef.current, fmt) } finally { setExporting(false) }
+    try { await exportDiagramImage(canvasRef.current, fmt) } finally { setExporting(false) }
+  }
+
+  const handleExportPdf = async () => {
+    if (!canvasRef.current || !archData) return
+    setExporting(true); setExportOpen(false)
+    try { await exportFullPdf(canvasRef.current, archData) } finally { setExporting(false) }
   }
 
   const exportJSON = () => {
@@ -271,7 +515,7 @@ export function ArchitectureGeneratorPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col gap-4 h-[calc(100vh-80px)] overflow-hidden">
+    <div className="flex flex-col gap-4 pb-8">
 
       {/* ── Title bar ──────────────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3 shrink-0">
@@ -334,25 +578,32 @@ export function ArchitectureGeneratorPage() {
                 </button>
 
                 {exportOpen && (
-                  <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-2xl shadow-2xl min-w-[170px] overflow-hidden">
+                  <div className="absolute right-0 top-full mt-1 z-50 bg-popover border border-border rounded-2xl shadow-2xl min-w-[200px] overflow-hidden">
                     <div className="px-3 py-2 border-b border-border">
                       <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Export Diagram As</p>
                     </div>
-                    {(['png', 'jpeg', 'webp', 'pdf'] as ExportFormat[]).map(fmt => (
+                    {(['png', 'jpeg', 'webp'] as ExportFormat[]).map(fmt => (
                       <button
                         key={fmt}
                         onClick={() => handleExport(fmt)}
                         className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 transition-colors text-left"
                       >
-                        {fmt === 'pdf'
-                          ? <FileText className="w-4 h-4 text-red-500 shrink-0" />
-                          : <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />}
+                        <ImageIcon className="w-4 h-4 text-blue-500 shrink-0" />
                         <span className="font-bold text-sm uppercase">{fmt}</span>
-                        <span className="text-xs text-muted-foreground ml-auto">
-                          {fmt === 'pdf' ? 'Document' : 'Image'}
-                        </span>
+                        <span className="text-xs text-muted-foreground ml-auto">Image</span>
                       </button>
                     ))}
+                    {/* PDF — includes all details */}
+                    <button
+                      onClick={handleExportPdf}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-muted/60 transition-colors text-left"
+                    >
+                      <FileText className="w-4 h-4 text-red-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-bold text-sm uppercase">PDF</span>
+                        <span className="block text-[9px] text-muted-foreground leading-tight">Full report with all details</span>
+                      </div>
+                    </button>
                     <div className="border-t border-border">
                       <button
                         onClick={exportJSON}
@@ -381,7 +632,7 @@ export function ArchitectureGeneratorPage() {
 
       {/* ── Body ──────────────────────────────────────────────────────────── */}
       {loading ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-muted/10">
+        <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-muted/10" style={{ minHeight: 420 }}>
           <div className="relative">
             <Loader2 className="w-12 h-12 animate-spin text-primary" />
             <Sparkles className="w-5 h-5 text-primary absolute -top-1 -right-1 animate-pulse" />
@@ -393,7 +644,7 @@ export function ArchitectureGeneratorPage() {
         </div>
 
       ) : !archData ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed border-border bg-muted/5">
+        <div className="flex flex-col items-center justify-center gap-5 rounded-2xl border-2 border-dashed border-border bg-muted/5" style={{ minHeight: 420 }}>
           <div className="p-5 rounded-2xl bg-primary/10 border border-primary/20">
             <Sparkles className="w-10 h-10 text-primary" />
           </div>
@@ -405,43 +656,44 @@ export function ArchitectureGeneratorPage() {
         </div>
 
       ) : (
-        /* ── Diagram + info cards stacked vertically ──────────────────────── */
-        <div className="flex-1 flex flex-col gap-4 min-h-0 overflow-y-auto custom-scrollbar">
+        /*
+         * ── 3-zone layout ───────────────────────────────────────────────────
+         * The outer wrapper scrolls vertically so all three zones are reachable.
+         *
+         * Zone 1 (top):    [Diagram — flex-1]  |  [Service Details — w-64]
+         * Zone 2 (bottom): [API Endpoints]  |  [Flow Explanation]  (full width)
+         */
+        <div className="flex flex-col gap-4">
 
-          {/* Diagram — full width */}
-          <div
-            ref={canvasRef}
-            className="w-full rounded-2xl border border-slate-700 overflow-hidden"
-            style={{ height: 420, background: '#0f172a', flexShrink: 0 }}
-          >
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onNodeClick={onNodeClick}
-              onPaneClick={() => setSelectedSvc(null)}
-              fitView
-              fitViewOptions={{ padding: 0.2 }}
-              proOptions={{ hideAttribution: true }}
+          {/* ── Zone 1: Diagram + Service Details side-by-side ── */}
+          <div className="flex gap-4" style={{ minHeight: 420 }}>
+
+            {/* Diagram — takes all space except the side panel */}
+            <div
+              ref={canvasRef}
+              className="flex-1 min-w-0 rounded-2xl border border-slate-700 overflow-hidden"
+              style={{ height: 420, background: '#0f172a' }}
             >
-              <Background variant={BackgroundVariant.Dots} color="#334155" gap={22} size={1.2} />
-              <Controls style={{ background: 'rgba(15,23,42,0.9)', borderColor: '#334155', borderRadius: 10 }} />
-              <MiniMap
-                nodeColor={n => PALETTE[(n.data?.colorIdx ?? 0) % PALETTE.length].border}
-                maskColor="rgba(0,0,0,0.35)"
-                style={{ backgroundColor: 'rgba(15,23,42,0.9)', borderRadius: 10, border: '1px solid #334155' }}
-              />
-            </ReactFlow>
-          </div>
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onNodeClick={onNodeClick}
+                onPaneClick={() => setSelectedSvc(null)}
+                fitView
+                fitViewOptions={{ padding: 0.25 }}
+                proOptions={{ hideAttribution: true }}
+              >
+                <Background variant={BackgroundVariant.Dots} color="#334155" gap={22} size={1.2} />
+                <Controls style={{ background: 'rgba(15,23,42,0.9)', borderColor: '#334155', borderRadius: 10 }} />
+              </ReactFlow>
+            </div>
 
-          {/* ── Info strip — 3 columns below diagram ─────────────────────── */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4" style={{ flexShrink: 0 }}>
-
-            {/* Service Details */}
-            <div className="rounded-2xl border border-border bg-card p-4">
+            {/* Service Details panel — fixed width, independent scroll */}
+            <div className="w-64 shrink-0 rounded-2xl border border-border bg-card p-4 overflow-y-auto custom-scrollbar" style={{ height: 420 }}>
               <div className="flex items-center gap-2 mb-3">
                 <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20">
                   <Info className="w-3.5 h-3.5 text-primary" />
@@ -493,12 +745,32 @@ export function ArchitectureGeneratorPage() {
                   })()}
                 </div>
               ) : (
-                <div className="text-center py-6 text-muted-foreground">
-                  <Server className="w-7 h-7 mx-auto mb-2 opacity-30" />
-                  <p className="text-xs">Click any service node in the diagram above to see its details here.</p>
+                <div className="space-y-2">
+                  <p className="text-[10px] text-muted-foreground mb-3">Click a node on the diagram to see its details, or browse all services below.</p>
+                  {archData.services.map((svc, i) => {
+                    const c = PALETTE[i % PALETTE.length]
+                    return (
+                      <button
+                        key={svc.name}
+                        onClick={() => setSelectedSvc(svc)}
+                        className="w-full text-left p-2.5 rounded-xl border transition-colors hover:bg-muted/30"
+                        style={{ borderColor: c.border + '40', background: c.bg }}
+                      >
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: c.border, flexShrink: 0 }} />
+                          <span className="text-xs font-bold" style={{ color: c.border }}>{svc.name}</span>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground leading-snug line-clamp-2 pl-3.5">{svc.description}</p>
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ── Zone 2: API Endpoints + Flow Explanation (separate, full width) ── */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 shrink-0">
 
             {/* API Endpoints */}
             <div className="rounded-2xl border border-border bg-card p-4">
@@ -512,7 +784,7 @@ export function ArchitectureGeneratorPage() {
                 </span>
               </div>
               {archData.apis.length > 0 ? (
-                <div className="space-y-2 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="space-y-2 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
                   {archData.apis.map((api, i) => (
                     <div key={i} className="p-2.5 rounded-xl border border-border bg-muted/20">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -549,7 +821,7 @@ export function ArchitectureGeneratorPage() {
                 </span>
               </div>
               {flowLines.length > 0 ? (
-                <div className="space-y-2.5 max-h-[220px] overflow-y-auto custom-scrollbar pr-1">
+                <div className="space-y-2.5 max-h-[280px] overflow-y-auto custom-scrollbar pr-1">
                   {flowLines.map((e, i) => (
                     <div key={i} className="flex items-start gap-2.5">
                       <span className="text-[9px] font-bold shrink-0 mt-0.5 w-4 h-4 rounded-full bg-violet-500/15 text-violet-500 flex items-center justify-center border border-violet-500/30">

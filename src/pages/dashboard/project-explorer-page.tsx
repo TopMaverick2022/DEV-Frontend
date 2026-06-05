@@ -1,36 +1,9 @@
-import { useState, useEffect } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { projectService } from '@/features/projects/project-service'
-import { Project } from '@/types/project'
-import { ProjectSwitcher } from '@/components/shared/project-switcher'
+import { useProject } from '@/features/projects/project-context'
 import { RepositoryBrowser } from '@/components/shared/repository-browser'
 import { Loader2, FolderKanban } from 'lucide-react'
 
 export function ProjectExplorerPage() {
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-
-  const { data: projects, isLoading } = useQuery({
-    queryKey: ['projects'],
-    queryFn: projectService.getMyProjects,
-  })
-
-  // Sync with localStorage
-  useEffect(() => {
-    if (projects && projects.length > 0) {
-      const savedId = localStorage.getItem('selectedProjectId')
-      const matched = savedId ? projects.find(p => p.id === parseInt(savedId)) : null
-      if (matched) {
-        setSelectedProject(matched)
-      } else if (!selectedProject) {
-        setSelectedProject(projects[0])
-      }
-    }
-  }, [projects])
-
-  const handleSelectProject = (project: Project) => {
-    setSelectedProject(project)
-    localStorage.setItem('selectedProjectId', project.id.toString())
-  }
+  const { projects, selectedProject, isLoading } = useProject()
 
   if (isLoading) {
     return (
@@ -51,13 +24,6 @@ export function ProjectExplorerPage() {
             Browse files currently checked out into the backend AI pipeline.
           </p>
         </div>
-        {projects && projects.length > 0 && (
-          <ProjectSwitcher
-            projects={projects}
-            selected={selectedProject}
-            onSelect={handleSelectProject}
-          />
-        )}
       </div>
 
       {selectedProject ? (

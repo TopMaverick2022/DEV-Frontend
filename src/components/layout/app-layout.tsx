@@ -4,10 +4,13 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Moon, Sun, Bell } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
 import { UserNav } from './user-nav'
+import { useProject } from '@/features/projects/project-context'
+import { ProjectSwitcher } from '@/components/shared/project-switcher'
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { theme, setTheme } = useTheme()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const { projects, selectedProject, setSelectedProject } = useProject()
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
@@ -16,7 +19,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       <main className="flex-1 flex flex-col h-screen overflow-hidden transition-all duration-300">
         <header className="h-16 border-b border-border/50 flex items-center justify-between px-8 bg-card/30 backdrop-blur-lg z-20 sticky top-0">
           <div className="flex items-center gap-4">
-            <h2 className="text-sm font-medium text-muted-foreground">Projects / <span className="text-foreground">DeveloperEv</span></h2>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-muted-foreground">Active Project:</span>
+              <ProjectSwitcher
+                projects={projects}
+                selected={selectedProject}
+                onSelect={setSelectedProject}
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

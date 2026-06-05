@@ -13,6 +13,7 @@ import apiClient from '@/lib/api-client'
 import { projectService } from '@/features/projects/project-service'
 import type { Project } from '@/types/project'
 import Swal from 'sweetalert2'
+import { useProject } from '@/features/projects/project-context'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -926,8 +927,7 @@ function SavedPlansSection({
 
 export function PlannerPage() {
   const [feature, setFeature]           = useState('')
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
-  const [projectDropdownOpen, setProjectDropdownOpen] = useState(false)
+  const { projects, selectedProject }   = useProject()
   const [loading, setLoading]           = useState(false)
   const [result, setResult]             = useState<PlanResult | null>(null)
   const [implemented, setImplemented]   = useState(false)
@@ -1057,10 +1057,7 @@ export function PlannerPage() {
     }
   }
 
-  const { data: projects = [] } = useQuery<Project[]>({
-    queryKey: ['projects'],
-    queryFn: () => projectService.getMyProjects(),
-  })
+  // Global projects context is used instead of local useQuery
 
   const handleGenerate = async () => {
     if (!feature.trim()) return
@@ -1254,45 +1251,10 @@ export function PlannerPage() {
       <GlassCard>
         <div className="space-y-5">
 
-          {/* Project Selector */}
-          <div className="space-y-2">
-            <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
-              <FolderKanban className="w-3.5 h-3.5 text-primary" />
-             Projects List <span className="text-destructive">*</span>
-            </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setProjectDropdownOpen(v => !v)}
-                className="w-full flex items-center justify-between bg-background/50 border border-input rounded-xl px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-primary hover:bg-background/80 transition-colors"
-              >
-                <span className={selectedProject ? 'text-foreground' : 'text-muted-foreground'}>
-                  {selectedProject
-                    ? <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-primary inline-block" />{selectedProject.name}</span>
-                    : 'Select a project...'}
-                </span>
-                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${projectDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-              {projectDropdownOpen && (
-                <div className="absolute z-20 w-full mt-1 bg-background border border-input rounded-xl shadow-2xl overflow-hidden">
-                  {projects.length === 0 ? (
-                    <div className="px-4 py-3 text-sm text-muted-foreground">No projects found. Create a project first.</div>
-                  ) : (
-                    projects.map(p => (
-                      <button
-                        key={p.id}
-                        onClick={() => { setSelectedProject(p); setProjectDropdownOpen(false) }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-left hover:bg-primary/10 transition-colors"
-                      >
-                        <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />
-                        <span className="font-medium text-foreground">{p.name}</span>
-                        {p.githubRepoUrl && <span className="ml-auto text-xs text-muted-foreground truncate max-w-[120px]">{p.githubRepoUrl.replace('https://github.com/', '')}</span>}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
+          {/* Target Project display */}
+          <div className="text-xs text-muted-foreground border-b border-border/30 pb-3 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
+            <span>Targeting Project: <strong className="text-foreground">{selectedProject?.name || 'None selected (select one in top header)'}</strong></span>
           </div>
 
           {/* Feature Description */}

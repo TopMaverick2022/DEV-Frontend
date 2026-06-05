@@ -24,6 +24,7 @@ import { ProjectExplorerPage } from '@/pages/dashboard/project-explorer-page'
 import { AppLayout } from '@/components/layout/app-layout'
 import { SmoothScrollProvider } from './components/shared/smooth-scroll-provider'
 import { AuthProvider } from '@/features/auth/auth-context'
+import { ProjectProvider } from '@/features/projects/project-context'
 
 const queryClient = new QueryClient()
 
@@ -32,12 +33,13 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="dark" storageKey="developer-ev-theme">
         <AuthProvider>
-          <BrowserRouter
-              future={{
-                v7_startTransition: true,
-                v7_relativeSplatPath: true,
-              }}
-            >
+          <ProjectProvider>
+            <BrowserRouter
+                future={{
+                  v7_startTransition: true,
+                  v7_relativeSplatPath: true,
+                }}
+              >
             <Routes>
               {/* Public routes */}
               <Route path="/" element={<SmoothScrollProvider><LandingPage /></SmoothScrollProvider>} />
@@ -70,6 +72,7 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
+          </ProjectProvider>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

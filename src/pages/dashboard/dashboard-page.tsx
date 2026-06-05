@@ -50,10 +50,10 @@ import apiClient, { tokenStore } from '@/lib/api-client'
 import { useNavigate } from 'react-router-dom'
 import { Project } from '@/types/project'
 import { GitHubPanel } from '@/components/shared/github-panel'
-import { ProjectSwitcher } from '@/components/shared/project-switcher'
+import { useProject } from '@/features/projects/project-context'
 import { AlertCircle } from 'lucide-react'
 import Swal from 'sweetalert2'
-import './quota-alerts.css' // We'll create this for custom styling
+import './quota-alerts.css'
 
 
 // ProjectSwitcher component has been moved to shared components
@@ -65,7 +65,7 @@ export function DashboardPage() {
   const [showModal, setShowModal] = useState(false)
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done'>('idle')
   const [uploadProgress, setUploadProgress] = useState({ loaded: 0, total: 0, percent: 0 })
-  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
+  const { projects, selectedProject, setSelectedProject, isLoading } = useProject()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const evtSourceRef = useRef<EventSource | null>(null)
 
@@ -261,7 +261,7 @@ export function DashboardPage() {
       confirmButtonColor: '#ef4444',
       cancelButtonColor: '#3f3f46',
       backdrop: `rgba(0,0,0,0.4) blur(4px)`
-    }).then(async (result) => {
+    }).then(async (result: import('sweetalert2').SweetAlertResult) => {
       if (result.isConfirmed) {
         if (evtSourceRef.current) {
           evtSourceRef.current.close();
@@ -287,24 +287,10 @@ export function DashboardPage() {
     });
   }
 
-  const { data: projects, isLoading, isError, error } = useQuery({
-    queryKey: ['projects'],
-    queryFn: () => projectService.getMyProjects(),
-  });
-
   useEffect(() => {
     const token = localStorage.getItem("token") || localStorage.getItem("auth_token") || localStorage.getItem("accessToken");
     console.log("Auth token from localStorage:", token);
   }, []);
-
-  useEffect(() => {
-    console.log("Projects query result:", {
-      projects,
-      isLoading,
-      isError,
-      error,
-    });
-  }, [projects, isLoading, isError, error]);
 
   // Fetch dynamic AI health stats for the selected project
   const { data: projectStats, isLoading: statsLoading } = useQuery({
@@ -317,38 +303,12 @@ export function DashboardPage() {
     enabled: !!selectedProject?.id,
   });
 
-  // Sync with localStorage
-  useEffect(() => {
-    if (projects && projects.length > 0) {
-      const savedId = localStorage.getItem('selectedProjectId')
-      const matched = savedId ? projects.find(p => p.id === parseInt(savedId)) : null
-      if (matched) {
-        setSelectedProject(matched)
-      } else if (!selectedProject) {
-        setSelectedProject(projects[0])
-      }
-    }
-  }, [projects])
-
-  const handleSelectProject = (project: Project) => {
-    setSelectedProject(project)
-    localStorage.setItem('selectedProjectId', project.id.toString())
-  }
+  // Selected project is managed globally via useProject context
 
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    )
-  }
-
-  if (isError) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-red-500">
-        <AlertCircle className="w-8 h-8 mb-2" />
-        <h2 className="text-xl font-semibold">Error Fetching Projects</h2>
-        <p className="text-sm text-red-400">{error?.message || 'An unknown error occurred.'}</p>
       </div>
     )
   }
@@ -378,14 +338,7 @@ export function DashboardPage() {
           <div className="flex items-center justify-start xl:justify-end gap-3 flex-wrap">
             <input ref={fileInputRef} type="file" accept=".zip" onChange={handleZipUpload} className="hidden" />
 
-            {/* Project switcher — only when there are projects */}
-            {hasProjects && (
-              <ProjectSwitcher
-                projects={projects}
-                selected={selectedProject}
-                onSelect={handleSelectProject}
-              />
-            )}
+            {/* Project switcher dropdown is now rendered globally in the header */}
 
             {/* GitHub link for the selected project */}
             {selectedProject?.githubRepoUrl && (
