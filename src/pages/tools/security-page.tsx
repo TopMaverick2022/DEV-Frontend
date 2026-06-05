@@ -3,8 +3,10 @@ import { GlassCard } from '@/components/shared/glass-components'
 import { ShieldCheck, Loader2, Sparkles, Copy, CheckCheck, AlertTriangle } from 'lucide-react'
 import apiClient from '@/lib/api-client'
 import ReactMarkdown from 'react-markdown'
+import { useProject } from '@/features/projects/project-context'
 
 export function SecurityPage() {
+  const { selectedProject } = useProject()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
@@ -17,7 +19,7 @@ export function SecurityPage() {
     setResult(null)
     setError(null)
     try {
-      const response = await apiClient.post('/ai/security-scan', { code })
+      const response = await apiClient.post('/ai/security-scan', { code, projectId: selectedProject?.id })
       setResult(typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2))
     } catch (err: any) {
       setError(err.response?.data?.message || 'Security scan failed. Please try again.')
@@ -35,12 +37,12 @@ export function SecurityPage() {
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex items-start gap-4">
+      <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-foreground">Security Scanner</h1>
           <p className="text-muted-foreground mt-1">Detect vulnerabilities, injection risks, and security anti-patterns in your code using AI.</p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full mt-1">
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full mt-1 shrink-0">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
           <span className="text-xs font-medium text-amber-500">Security Tool</span>
         </div>
@@ -91,3 +93,4 @@ export function SecurityPage() {
     </div>
   )
 }
+

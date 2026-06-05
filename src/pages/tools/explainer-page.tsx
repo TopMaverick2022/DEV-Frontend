@@ -3,8 +3,10 @@ import { GlassCard } from '@/components/shared/glass-components'
 import { Search, Loader2, Sparkles, Copy, CheckCheck } from 'lucide-react'
 import apiClient from '@/lib/api-client'
 import ReactMarkdown from 'react-markdown'
+import { useProject } from '@/features/projects/project-context'
 
 export function ExplainerPage() {
+  const { selectedProject } = useProject()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
@@ -20,6 +22,7 @@ export function ExplainerPage() {
       const response = await apiClient.post('/ai/analyze', {
         code,
         analysisType: 'explain',
+        projectId: selectedProject?.id,
       })
       setResult(typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2))
     } catch (err: any) {
@@ -88,3 +91,4 @@ export function ExplainerPage() {
     </div>
   )
 }
+

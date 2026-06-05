@@ -24,6 +24,7 @@ import {
 import apiClient from '@/lib/api-client'
 import { toPng, toJpeg } from 'html-to-image'
 import jsPDF from 'jspdf'
+import { useProject } from '@/features/projects/project-context'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface ServiceDto { name: string; description: string; database?: string }
@@ -444,6 +445,7 @@ async function exportDiagramImage(el: HTMLElement, format: ExportFormat, filenam
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export function ArchitectureGeneratorPage() {
+  const { selectedProject } = useProject()
   const location    = useLocation()
   const initialIdea = (location.state as any)?.prompt || ''
 
@@ -465,7 +467,10 @@ export function ArchitectureGeneratorPage() {
     if (!q.trim()) return
     setLoading(true); setSelectedSvc(null)
     try {
-      const { data } = await apiClient.post<ArchData>('/ai/generate-architecture', { idea: q })
+      const { data } = await apiClient.post<ArchData>('/ai/generate-architecture', {
+        idea: q,
+        projectId: selectedProject?.id,
+      })
       setArchData(data)
       const { nodes: n, edges: e } = buildNodesAndEdges(data)
       setNodes(n); setEdges(e)
@@ -474,7 +479,7 @@ export function ArchitectureGeneratorPage() {
     } finally {
       setLoading(false)
     }
-  }, [idea, setNodes, setEdges])
+  }, [idea, setNodes, setEdges, selectedProject])
 
   useEffect(() => {
     if (initialIdea && !hasAutoGen) { setHasAutoGen(true); handleGenerate(initialIdea) }

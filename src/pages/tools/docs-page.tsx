@@ -3,8 +3,10 @@ import { GlassCard } from '@/components/shared/glass-components'
 import { FileText, Loader2, Sparkles, Copy, CheckCheck } from 'lucide-react'
 import apiClient from '@/lib/api-client'
 import ReactMarkdown from 'react-markdown'
+import { useProject } from '@/features/projects/project-context'
 
 export function DocsPage() {
+  const { selectedProject } = useProject()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<string | null>(null)
@@ -17,7 +19,7 @@ export function DocsPage() {
     setResult(null)
     setError(null)
     try {
-      const response = await apiClient.post('/ai/generate-docs', { code })
+      const response = await apiClient.post('/ai/generate-docs', { code, projectId: selectedProject?.id })
       setResult(typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2))
     } catch (err: any) {
       setError(err.response?.data?.message || 'Documentation generation failed. Please try again.')
@@ -85,3 +87,4 @@ export function DocsPage() {
     </div>
   )
 }
+

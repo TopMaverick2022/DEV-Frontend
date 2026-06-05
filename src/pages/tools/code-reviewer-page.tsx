@@ -3,6 +3,7 @@ import Editor from '@monaco-editor/react'
 import { GlassCard } from '@/components/shared/glass-components'
 import { cn } from '@/lib/utils'
 import apiClient from '@/lib/api-client'
+import { useProject } from '@/features/projects/project-context'
 import { 
   Play, 
   Save, 
@@ -37,6 +38,7 @@ const checkout = (cart) => {
 `
 
 export function CodeReviewerPage() {
+  const { selectedProject } = useProject()
   const [code, setCode] = useState(initialCode)
   const [loading, setLoading] = useState(false)
   const [reviewResult, setReviewResult] = useState<any>(null)
@@ -47,7 +49,8 @@ export function CodeReviewerPage() {
     try {
       const response = await apiClient.post('/ai/analyze', {
         code,
-        analysisType: 'all'
+        analysisType: 'all',
+        projectId: selectedProject?.id
       })
       setReviewResult(response.data)
     } catch (error) {
@@ -64,6 +67,9 @@ export function CodeReviewerPage() {
     setLoading(true)
     const formData = new FormData()
     formData.append('project', file)
+    if (selectedProject?.id) {
+      formData.append('projectId', selectedProject.id.toString())
+    }
 
     try {
       const response = await apiClient.post('/ai/code-review-zip', formData, {
@@ -109,6 +115,7 @@ export function CodeReviewerPage() {
           </button>
         </div>
       </div>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
         <GlassCard className="lg:col-span-2 p-0 overflow-hidden border-white/5 flex flex-col">

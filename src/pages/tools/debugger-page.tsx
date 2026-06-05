@@ -3,8 +3,10 @@ import { GlassCard } from '@/components/shared/glass-components'
 import { Bug, Loader2, Sparkles, Copy, CheckCheck } from 'lucide-react'
 import apiClient from '@/lib/api-client'
 import ReactMarkdown from 'react-markdown'
+import { useProject } from '@/features/projects/project-context'
 
 export function DebuggerPage() {
+  const { selectedProject } = useProject()
   const [errorLog, setErrorLog] = useState('')
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
@@ -21,6 +23,7 @@ export function DebuggerPage() {
       const response = await apiClient.post('/ai/debug', {
         errorLog,
         code,
+        projectId: selectedProject?.id,
       })
       setResult(typeof response.data === 'string' ? response.data : JSON.stringify(response.data, null, 2))
     } catch (err: any) {
@@ -100,3 +103,4 @@ export function DebuggerPage() {
     </div>
   )
 }
+
