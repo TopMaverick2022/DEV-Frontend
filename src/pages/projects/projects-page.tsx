@@ -2,22 +2,44 @@ import { useState, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
 import { CreateProjectModal } from '@/components/shared/create-project-modal'
-import { Plus, Trash2, Github, Loader2, FolderOpen, ExternalLink, Upload, CheckCircle } from 'lucide-react'
+import {
+  Plus, Trash2, Github, Loader2, FolderOpen, ExternalLink,
+  Upload, CheckCircle, Brain, ChevronDown, ChevronUp, Sparkles,
+} from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectService } from '@/features/projects/project-service'
 import { Project } from '@/types/project'
 import apiClient from '@/lib/api-client'
 
 
+// ── Project Card ─────────────────────────────────────────────────────────────
 function ProjectCard({ project, onDelete }: { project: Project; onDelete: (id: number) => void }) {
+  const [analyzing, setAnalyzing]         = useState(false)
+  const [aiContext, setAiContext]          = useState<string | null>(project.aiBusinessContext ?? null)
+  const [contextOpen, setContextOpen]     = useState(false)
+  const [analyzeSuccess, setAnalyzeSuccess] = useState(false)
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true)
+    try {
+      const { data } = await apiClient.post<{ aiBusinessContext: string }>(
+        `/api/projects/${project.id}/analyze-business-context`
+      )
+      setAiContext(data.aiBusinessContext)
+      setContextOpen(true)
+      setAnalyzeSuccess(true)
+      setTimeout(() => setAnalyzeSuccess(false), 3000)
+    } catch (e) {
+      console.error('Failed to analyze business context', e)
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-    >
+    <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}>
       <GlassCard className="group relative hover:border-primary/30 transition-colors">
+        {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
@@ -37,18 +59,21 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: (id: n
             )}
             <button
               onClick={() => onDelete(project.id)}
-              className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
-            >
+              className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100">
               <Trash2 className="w-4 h-4" />
             </button>
           </div>
         </div>
+
+        {/* GitHub URL */}
         {project.githubRepoUrl && (
           <div className="mt-3 flex items-center gap-1.5 text-xs text-muted-foreground">
             <Github className="w-3 h-3" />
             <span className="truncate">{project.githubRepoUrl.replace('https://github.com/', '')}</span>
           </div>
         )}
+
+        {/* Tech badges */}
         {(project.language || project.framework || project.databaseName) && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {project.language && (
@@ -68,6 +93,61 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: (id: n
             )}
           </div>
         )}
+
+        {/* AI Business Context section */}
+        <div className="mt-3 border-t border-border/50 pt-3">
+          <div className="flex items-center gap-2">
+            {/* Analyze button */}
+            <button
+              onClick={handleAnalyze}
+              disabled={analyzing}
+              title="Scan codebase and extract business understanding"
+              className={`flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-full border transition-all shrink-0
+                ${analyzeSuccess
+                  ? 'bg-green-500/10 border-green-500/30 text-green-500'
+                  : 'bg-violet-500/10 border-violet-500/30 text-violet-400 hover:bg-violet-500/20'
+                }
+                disabled:opacity-50`}
+            >
+              {analyzing
+                ? <Loader2 className="w-3 h-3 animate-spin" />
+                : analyzeSuccess
+                ? <CheckCircle className="w-3 h-3" />
+                : <Brain className="w-3 h-3" />
+              }
+              {analyzing ? 'Analyzing…' : analyzeSuccess ? 'Done!' : 'Analyze Codebase'}
+            </button>
+
+            {/* Toggle existing context */}
+            {aiContext && (
+              <button
+                onClick={() => setContextOpen(v => !v)}
+                className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors ml-auto"
+              >
+                <Sparkles className="w-3 h-3 text-violet-400" />
+                AI Understood
+                {contextOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            )}
+          </div>
+
+          {/* Expandable AI context panel */}
+          <AnimatePresence>
+            {contextOpen && aiContext && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 p-2.5 rounded-xl bg-violet-500/5 border border-violet-500/20 text-[10px] text-muted-foreground leading-relaxed max-h-40 overflow-y-auto custom-scrollbar">
+                  {aiContext}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
         <p className="text-xs text-muted-foreground mt-2.5">
           Created {new Date(project.createdAt).toLocaleDateString()}
         </p>
@@ -76,6 +156,7 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: (id: n
   )
 }
 
+// ── Page ─────────────────────────────────────────────────────────────────────
 export function ProjectsPage() {
   const [showModal, setShowModal] = useState(false)
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done'>('idle')

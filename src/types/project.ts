@@ -10,6 +10,7 @@ export interface Project {
   databaseName?: string;
   databaseVersion?: string;
   dependencies?: string;
+  aiBusinessContext?: string;
   createdAt: string;
   owner?: {
     id: number;
