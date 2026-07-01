@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { projectService } from './project-service'
 import { Project } from '../../types/project'
+import { useAuth } from '@/features/auth/auth-context'
 
 interface ProjectContextType {
   projects: Project[]
@@ -13,11 +14,13 @@ interface ProjectContextType {
 const ProjectContext = createContext<ProjectContextType | undefined>(undefined)
 
 export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isAuthenticated } = useAuth()
   const [selectedProject, setSelectedProjectState] = useState<Project | null>(null)
 
   const { data: projects = [], isLoading } = useQuery<Project[]>({
     queryKey: ['projects'],
     queryFn: projectService.getMyProjects,
+    enabled: isAuthenticated,
   })
 
   // Sync selectedProject with localStorage and projects list

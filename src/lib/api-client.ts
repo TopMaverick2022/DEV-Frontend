@@ -3,6 +3,9 @@ import axios from "axios";
 // Access token lives in memory only — never in localStorage
 let inMemoryAccessToken: string | null = null;
 
+// Single in-flight promise to prevent race: multiple 401s all trigger one refresh
+let refreshPromise: Promise<string> | null = null;
+
 export const tokenStore = {
   get: () => inMemoryAccessToken,
   set: (token: string) => { inMemoryAccessToken = token; },
@@ -41,16 +44,26 @@ apiClient.interceptors.response.use(
     ) {
       originalRequest._retry = true;
       try {
-        const { data } = await axios.post(
-          "http://localhost:8080/api/auth/refresh-token",
-          {},
-          { withCredentials: true }
-        );
-        tokenStore.set(data.accessToken);
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`;
+        // Reuse an in-flight refresh so parallel 401s don't all call the endpoint
+        if (!refreshPromise) {
+          refreshPromise = axios
+            .post(
+              "http://localhost:8080/api/auth/refresh-token",
+              {},
+              { withCredentials: true }
+            )
+            .then((res) => res.data.accessToken)
+            .finally(() => { refreshPromise = null; });
+        }
+        const newAccessToken = await refreshPromise;
+        tokenStore.set(newAccessToken);
+        localStorage.setItem("accessToken", newAccessToken);
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
         return apiClient(originalRequest);
       } catch {
         tokenStore.clear();
+        localStorage.removeItem("accessToken");
+        localStorage.removeItem("username");
         if (window.location.pathname !== '/login') {
           window.location.href = "/login";
         }

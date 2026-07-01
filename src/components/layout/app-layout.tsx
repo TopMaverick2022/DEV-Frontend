@@ -1,16 +1,31 @@
 import { useState } from 'react'
 import { Sidebar } from './sidebar'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Moon, Sun, Bell } from 'lucide-react'
+import { Moon, Sun, Bell, Loader2 } from 'lucide-react'
 import { useTheme } from '@/components/theme-provider'
 import { UserNav } from './user-nav'
 import { useProject } from '@/features/projects/project-context'
 import { ProjectSwitcher } from '@/components/shared/project-switcher'
+import { useAuth } from '@/features/auth/auth-context'
+import { Navigate } from 'react-router-dom'
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
   const { theme, setTheme } = useTheme()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const { projects, selectedProject, setSelectedProject } = useProject()
+
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
