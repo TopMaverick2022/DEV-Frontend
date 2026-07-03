@@ -5,6 +5,7 @@ import { CreateProjectModal } from '@/components/shared/create-project-modal'
 import {
   Plus, Trash2, Github, Loader2, FolderOpen, ExternalLink,
   Upload, CheckCircle, Brain, ChevronDown, ChevronUp, Sparkles,
+  Monitor, Server, Link2, Unlink, LayoutDashboard,
 } from 'lucide-react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { projectService } from '@/features/projects/project-service'
@@ -12,12 +13,37 @@ import { Project } from '@/types/project'
 import apiClient from '@/lib/api-client'
 
 
+// ── Project Type Badge ────────────────────────────────────────────────────────
+function ProjectTypeBadge({ type }: { type?: string }) {
+  if (!type || type === 'STANDALONE') return null
+  const isFE = type === 'FRONTEND'
+  return (
+    <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full border
+      ${ isFE
+        ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
+        : 'bg-orange-500/10 text-orange-400 border-orange-500/30'
+      }`}>
+      {isFE ? <Monitor className="w-2.5 h-2.5" /> : <Server className="w-2.5 h-2.5" />}
+      {isFE ? 'Frontend' : 'Backend'}
+    </span>
+  )
+}
+
 // ── Project Card ─────────────────────────────────────────────────────────────
-function ProjectCard({ project, onDelete }: { project: Project; onDelete: (id: number) => void }) {
+function ProjectCard({ project, allProjects, onDelete }: {
+  project: Project
+  allProjects: Project[]
+  onDelete: (id: number) => void
+}) {
   const [analyzing, setAnalyzing]         = useState(false)
   const [aiContext, setAiContext]          = useState<string | null>(project.aiBusinessContext ?? null)
   const [contextOpen, setContextOpen]     = useState(false)
   const [analyzeSuccess, setAnalyzeSuccess] = useState(false)
+  const [showLinkPanel, setShowLinkPanel]   = useState(false)
+  const [linkTarget, setLinkTarget]         = useState<number | null>(null)
+  const queryClient = useQueryClient()
+
+  const linkedProject = allProjects.find(p => p.id === project.relatedProjectId) ?? null
 
   const handleAnalyze = async () => {
     setAnalyzing(true)
@@ -36,17 +62,49 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: (id: n
     }
   }
 
+  const linkMutation = useMutation({
+    mutationFn: ({ targetId, type }: { targetId: number; type: 'FRONTEND' | 'BACKEND' }) =>
+      projectService.linkProjects(project.id, targetId, type),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] })
+      setShowLinkPanel(false)
+    },
+  })
+
+  const unlinkMutation = useMutation({
+    mutationFn: () => projectService.unlinkProject(project.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['projects'] }),
+  })
+
+  const isLinked   = !!project.relatedProjectId
+  const isFrontend = project.projectType === 'FRONTEND'
+  const isBackend  = project.projectType === 'BACKEND'
+
+  // Candidates for linking: exclude self, exclude already-same-type
+  const linkCandidates = allProjects.filter(p =>
+    p.id !== project.id &&
+    (!p.relatedProjectId || p.relatedProjectId === project.id)
+  )
+
   return (
     <motion.div layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}>
       <GlassCard className="group relative hover:border-primary/30 transition-colors">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-primary/10 rounded-xl border border-primary/20">
-              <FolderOpen className="w-5 h-5 text-primary" />
+            <div className={`p-2.5 rounded-xl border
+              ${ isFrontend ? 'bg-cyan-500/10 border-cyan-500/20'
+                : isBackend  ? 'bg-orange-500/10 border-orange-500/20'
+                : 'bg-primary/10 border-primary/20'}`}>
+              { isFrontend ? <Monitor className="w-5 h-5 text-cyan-400" />
+                : isBackend  ? <Server className="w-5 h-5 text-orange-400" />
+                : <FolderOpen className="w-5 h-5 text-primary" />}
             </div>
             <div>
-              <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{project.name}</h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">{project.name}</h3>
+                <ProjectTypeBadge type={project.projectType} />
+              </div>
               <p className="text-sm text-muted-foreground line-clamp-1">{project.description || 'No description'}</p>
             </div>
           </div>
@@ -57,6 +115,26 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: (id: n
                 <ExternalLink className="w-4 h-4" />
               </a>
             )}
+            {/* Link / Unlink toggle */}
+            {isLinked ? (
+              <button
+                onClick={() => unlinkMutation.mutate()}
+                disabled={unlinkMutation.isPending}
+                title="Remove project link"
+                className="p-1.5 hover:bg-orange-500/10 rounded-lg transition-colors text-muted-foreground hover:text-orange-400 opacity-0 group-hover:opacity-100"
+              >
+                {unlinkMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Unlink className="w-4 h-4" />}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowLinkPanel(v => !v)}
+                title="Link to another project"
+                className={`p-1.5 rounded-lg transition-colors opacity-0 group-hover:opacity-100
+                  ${ showLinkPanel ? 'bg-primary/10 text-primary' : 'hover:bg-white/10 text-muted-foreground hover:text-foreground'}`}
+              >
+                <Link2 className="w-4 h-4" />
+              </button>
+            )}
             <button
               onClick={() => onDelete(project.id)}
               className="p-1.5 hover:bg-destructive/10 rounded-lg transition-colors text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100">
@@ -64,6 +142,81 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: (id: n
             </button>
           </div>
         </div>
+
+        {/* Linked project pill */}
+        {linkedProject && (
+          <div className="mt-2 flex items-center gap-1.5">
+            <span className="text-[10px] text-muted-foreground">Paired with</span>
+            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border
+              ${ linkedProject.projectType === 'FRONTEND'
+                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                : 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+              }`}>
+              <Link2 className="w-2.5 h-2.5" />
+              {linkedProject.name}
+            </span>
+          </div>
+        )}
+
+        {/* Inline link panel */}
+        <AnimatePresence>
+          {showLinkPanel && !isLinked && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+            >
+              <div className="mt-3 p-3 rounded-xl border border-dashed border-primary/30 bg-primary/5 space-y-2">
+                <p className="text-[10px] font-semibold text-foreground flex items-center gap-1">
+                  <Link2 className="w-3 h-3 text-primary" /> Link to companion project
+                </p>
+                <div className="flex gap-2">
+                  <select
+                    className="flex-1 bg-background/50 border border-input rounded-lg px-2 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    value={linkTarget ?? ''}
+                    onChange={e => setLinkTarget(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">Select project…</option>
+                    {linkCandidates.map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <select
+                    className="bg-background/50 border border-input rounded-lg px-2 py-1.5 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                    value={project.projectType === 'STANDALONE' ? 'FRONTEND' : project.projectType}
+                    onChange={() => {}}
+                    disabled
+                  >
+                    <option value="FRONTEND">I am Frontend</option>
+                    <option value="BACKEND">I am Backend</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={!linkTarget || linkMutation.isPending}
+                    onClick={() => linkTarget && linkMutation.mutate({
+                      targetId: linkTarget,
+                      type: (project.projectType === 'BACKEND' ? 'BACKEND' : 'FRONTEND') as 'FRONTEND' | 'BACKEND'
+                    })}
+                    className="flex-1 py-1.5 text-[11px] bg-primary text-primary-foreground rounded-lg font-medium flex items-center justify-center gap-1 hover:opacity-90 disabled:opacity-50 transition-opacity"
+                  >
+                    {linkMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Link2 className="w-3 h-3" />}
+                    Link Projects
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowLinkPanel(false)}
+                    className="px-3 py-1.5 text-[11px] border border-border rounded-lg hover:bg-muted transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* GitHub URL */}
         {project.githubRepoUrl && (
@@ -241,7 +394,7 @@ export function ProjectsPage() {
           <motion.div layout className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             <AnimatePresence>
               {projects.map((p) => (
-                <ProjectCard key={p.id} project={p} onDelete={(id) => deleteMutation.mutate(id)} />
+                <ProjectCard key={p.id} project={p} allProjects={projects} onDelete={(id) => deleteMutation.mutate(id)} />
               ))}
             </AnimatePresence>
           </motion.div>

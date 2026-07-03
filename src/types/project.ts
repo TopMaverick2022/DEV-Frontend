@@ -1,3 +1,5 @@
+export type ProjectType = 'STANDALONE' | 'FRONTEND' | 'BACKEND'
+
 export interface Project {
   id: number;
   name: string;
@@ -12,6 +14,10 @@ export interface Project {
   dependencies?: string;
   aiBusinessContext?: string;
   createdAt: string;
+  /** STANDALONE = normal single-repo project; FRONTEND/BACKEND = paired projects */
+  projectType?: ProjectType;
+  /** ID of the linked companion project (null for STANDALONE) */
+  relatedProjectId?: number;
   owner?: {
     id: number;
     username: string;

@@ -1318,84 +1318,88 @@ export function PlannerPage() {
 
           {/* Summary Banner */}
           <GlassCard>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              {editingResultFeature ? (
-                <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <FolderKanban className="w-4 h-4 text-primary shrink-0" />
-                  <input
-                    type="text"
-                    value={editFeatureName}
-                    onChange={e => setEditFeatureName(e.target.value)}
-                    className="bg-[#18181b] border border-border rounded-lg px-2 py-1 text-sm text-foreground w-full max-w-[240px]"
-                  />
-                  <select
-                    value={editFeatureComplexity}
-                    onChange={e => setEditFeatureComplexity(e.target.value)}
-                    className="bg-[#18181b] border border-border rounded-lg px-2 py-1 text-xs text-foreground"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                  <button
-                    onClick={handleSaveResultFeature}
-                    className="p-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white transition-colors"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setEditingResultFeature(false)}
-                    className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <CheckCircle2 className="w-4 h-4 text-green-400" />
-                    <span className="text-xs text-green-400 font-medium uppercase tracking-wide">Plan Generated & Saved</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-bold text-foreground">{result.featureName || result.name}</h2>
-                    
-                    {/* Edit Button */}
-                    <button
-                      onClick={() => {
-                        setEditingResultFeature(true)
-                        setEditFeatureName(result.featureName || result.name || '')
-                        setEditFeatureComplexity(result.complexity)
-                      }}
-                      className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                      title="Edit Plan"
+            <div className="flex flex-col gap-4">
+              {/* Top row: feature title/edit + action buttons */}
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                {editingResultFeature ? (
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <FolderKanban className="w-4 h-4 text-primary shrink-0" />
+                    <input
+                      type="text"
+                      value={editFeatureName}
+                      onChange={e => setEditFeatureName(e.target.value)}
+                      className="bg-[#18181b] border border-border rounded-lg px-2 py-1 text-sm text-foreground w-full max-w-[240px]"
+                    />
+                    <select
+                      value={editFeatureComplexity}
+                      onChange={e => setEditFeatureComplexity(e.target.value)}
+                      className="bg-[#18181b] border border-border rounded-lg px-2 py-1 text-xs text-foreground"
                     >
-                      <Edit2 className="w-3.5 h-3.5" />
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                    <button
+                      onClick={handleSaveResultFeature}
+                      className="p-1.5 rounded-lg bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white transition-colors"
+                    >
+                      <Check className="w-3.5 h-3.5" />
                     </button>
-
-                    {/* Delete Button */}
                     <button
-                      onClick={handleDeleteResultFeature}
-                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors shrink-0"
-                      title="Delete Plan"
+                      onClick={() => setEditingResultFeature(false)}
+                      className="p-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-
-                    {/* Download PDF */}
-                    <button
-                      onClick={() => handleDownloadGlobalPlan(result)}
-                      className="p-1.5 rounded-lg hover:bg-blue-500/10 text-muted-foreground hover:text-blue-400 transition-colors shrink-0"
-                      title="Download Full Plan (PDF)"
-                    >
-                      <Download className="w-3.5 h-3.5" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    Linked to <span className="text-foreground font-medium">{selectedProject?.name}</span>
-                  </p>
-                </div>
-              )}
+                ) : (
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <CheckCircle2 className="w-4 h-4 text-green-400 shrink-0" />
+                      <span className="text-xs text-green-400 font-medium uppercase tracking-wide">Plan Generated & Saved</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xl font-bold text-foreground truncate">{result.featureName || result.name}</h2>
+                      
+                      {/* Edit Button */}
+                      <button
+                        onClick={() => {
+                          setEditingResultFeature(true)
+                          setEditFeatureName(result.featureName || result.name || '')
+                          setEditFeatureComplexity(result.complexity)
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                        title="Edit Plan"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
 
+                      {/* Delete Button */}
+                      <button
+                        onClick={handleDeleteResultFeature}
+                        className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors shrink-0"
+                        title="Delete Plan"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {/* Download PDF */}
+                      <button
+                        onClick={() => handleDownloadGlobalPlan(result)}
+                        className="p-1.5 rounded-lg hover:bg-blue-500/10 text-muted-foreground hover:text-blue-400 transition-colors shrink-0"
+                        title="Download Full Plan (PDF)"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-0.5">
+                      Linked to <span className="text-foreground font-medium">{selectedProject?.name}</span>
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Stats row + implement button */}
               <div className="flex flex-wrap gap-3 items-center">
                 {/* Complexity */}
                 <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-background/60 border border-border">
@@ -1433,8 +1437,9 @@ export function PlannerPage() {
                 </button>
               </div>
 
+              {/* Detected stack needs */}
               {getDetectedNeedsArray(result.detectedNeeds).length > 0 && (
-                <div className="mt-4 p-3.5 rounded-xl bg-primary/5 border border-primary/10 text-left w-full">
+                <div className="p-3.5 rounded-xl bg-primary/5 border border-primary/10 text-left">
                   <h4 className="text-xs font-semibold text-primary flex items-center gap-1.5 mb-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-primary" />
                     AI-Detected Stack Needs for this Feature
@@ -1450,6 +1455,7 @@ export function PlannerPage() {
               )}
             </div>
           </GlassCard>
+
 
           {/* Tasks By Category */}
           {Object.entries(tasksByType).map(([type, tasks]) => {

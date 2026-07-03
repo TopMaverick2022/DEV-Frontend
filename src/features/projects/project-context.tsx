@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { projectService } from './project-service'
 import { Project } from '../../types/project'
@@ -8,6 +8,8 @@ interface ProjectContextType {
   projects: Project[]
   selectedProject: Project | null
   setSelectedProject: (p: Project | null) => void
+  /** The paired companion project (FRONTEND<->BACKEND). null if STANDALONE or no link. */
+  linkedProject: Project | null
   isLoading: boolean
 }
 
@@ -47,11 +49,21 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }
   }
 
+  /**
+   * Resolve the companion project from the already-loaded projects list
+   * (no extra network call needed - all user projects are already fetched).
+   */
+  const linkedProject = useMemo<Project | null>(() => {
+    if (!selectedProject?.relatedProjectId) return null
+    return projects.find(p => p.id === selectedProject.relatedProjectId) ?? null
+  }, [selectedProject, projects])
+
   return (
     <ProjectContext.Provider value={{
       projects,
       selectedProject,
       setSelectedProject,
+      linkedProject,
       isLoading
     }}>
       {children}

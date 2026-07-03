@@ -1,5 +1,5 @@
 import apiClient from "../../lib/api-client";
-import { Project, AddProjectMemberRequest } from "../../types/project";
+import { Project, ProjectType, AddProjectMemberRequest } from "../../types/project";
 
 export const projectService = {
   async createProject(project: Partial<Project>): Promise<Project> {
@@ -30,7 +30,43 @@ export const projectService = {
   async getProjectMembers(projectId: number): Promise<string[]> {
     const response = await apiClient.get<string[]>(`/projects/${projectId}/members`);
     return response.data;
-  }
+  },
+
+  /**
+   * Links two projects bidirectionally.
+   * projectType determines whether this project is FRONTEND or BACKEND.
+   */
+  async linkProjects(
+    projectId: number,
+    relatedProjectId: number,
+    projectType: ProjectType
+  ): Promise<Project> {
+    const response = await apiClient.put<Project>(`/projects/${projectId}/link`, {
+      relatedProjectId,
+      projectType,
+    });
+    return response.data;
+  },
+
+  /**
+   * Removes the link on both sides, resetting both to STANDALONE.
+   */
+  async unlinkProject(projectId: number): Promise<Project> {
+    const response = await apiClient.delete<Project>(`/projects/${projectId}/link`);
+    return response.data;
+  },
+
+  /**
+   * Returns the companion project if linked, or null.
+   */
+  async getLinkedProject(projectId: number): Promise<Project | null> {
+    try {
+      const response = await apiClient.get<Project>(`/projects/${projectId}/linked`);
+      return response.data;
+    } catch {
+      return null;
+    }
+  },
 };
 
 // Also export individual functions to match user's requested style
