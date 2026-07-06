@@ -36,6 +36,8 @@ interface PlanResult {
   tasks: TaskDto[]
   error?: string
   detectedNeeds?: string
+  analysisStatus?: 'FRESH' | 'PARTIAL' | 'EXISTS'
+  suggestion?: string
 }
 
 interface SavedFeaturePlan {
@@ -1100,7 +1102,57 @@ export function PlannerPage() {
         projectId: selectedProject.id,
       }, { signal: controller.signal })
 
-      setResult(response.data)
+      const data = response.data
+
+      // ── Smart Pre-flight Dialog ──────────────────────────────────────────────
+      // If the AI detected the feature is partially done or already exists,
+      // show a friendly dialog before committing the plan.
+      if (data.analysisStatus === 'PARTIAL' || data.analysisStatus === 'EXISTS') {
+        const statusLabel = data.analysisStatus === 'EXISTS' ? '✅ Already Implemented' : '🔧 Partially Implemented'
+        const statusColor = data.analysisStatus === 'EXISTS' ? '#22c55e' : '#f59e0b'
+        const confirmText = data.analysisStatus === 'EXISTS'
+          ? 'View Improvement Plan'
+          : 'Continue from Here'
+
+        const preflightResult = await Swal.fire({
+          title: statusLabel,
+          html: `
+            <div style="text-align:left;padding:4px 0">
+              <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 16px;margin-bottom:16px">
+                <p style="color:#d4d4d8;font-size:14px;line-height:1.7;margin:0">${data.suggestion || 'The AI analyzed your existing codebase and found relevant code.'}</p>
+              </div>
+              <p style="color:#71717a;font-size:13px;margin:0">How would you like to proceed?</p>
+            </div>
+          `,
+          background: 'rgba(15,15,20,0.97)',
+          color: '#fff',
+          showCancelButton: true,
+          showDenyButton: true,
+          confirmButtonText: confirmText,
+          denyButtonText: '🔄 Build from Scratch',
+          cancelButtonText: 'Cancel',
+          confirmButtonColor: statusColor,
+          denyButtonColor: '#6366f1',
+          cancelButtonColor: '#3f3f46',
+          backdrop: 'rgba(0,0,0,0.6) blur(6px)',
+          customClass: { popup: 'swal-preflight-popup' },
+          reverseButtons: false,
+        })
+
+        if (preflightResult.isDismissed) {
+          // User cancelled — don't set any result, let them rethink
+          return
+        }
+
+        if (preflightResult.isDenied) {
+          // Build from scratch — strip analysisStatus so it renders as fresh
+          data.analysisStatus = 'FRESH'
+          data.suggestion = undefined
+        }
+        // If confirmed — proceed with the partial/exists plan as-is
+      }
+
+      setResult(data)
       // Refresh saved plans list so the new plan appears immediately
       queryClient.invalidateQueries({ queryKey: ['projectPlans', selectedProject?.id] })
 
