@@ -86,6 +86,17 @@ const COMPLEXITY_META: Record<string, { color: string; icon: React.ReactNode }> 
 }
 
 function getTypeMeta(type: string) {
+  const t = type.toLowerCase()
+  if (t.includes('backend') || t.includes('api')) return TYPE_META['Backend']
+  if (t.includes('frontend') || t.includes('ui') || t.includes('client')) return TYPE_META['Frontend']
+  if (t.includes('database') || t.includes('schema') || t.includes('sql')) return TYPE_META['Database']
+  if (t.includes('config') || t.includes('devops') || t.includes('deploy')) return TYPE_META['DevOps']
+  if (t.includes('test')) return TYPE_META['Testing']
+  if (t.includes('doc')) return TYPE_META['Documentation']
+  if (t.includes('arch')) return TYPE_META['Architecture']
+  if (t.includes('secur')) return TYPE_META['Security']
+  if (t.includes('design') || t.includes('ux')) return TYPE_META['Design']
+  
   return TYPE_META[type] ?? { icon: <Code2 className="w-3.5 h-3.5" />, color: 'text-slate-400', bg: 'bg-slate-500/10 border-slate-500/20' }
 }
 
@@ -95,10 +106,10 @@ function getPriorityMeta(priority: string) {
 
 function getSvgIconForType(type: string) {
   const t = type.toLowerCase()
-  if (t === 'backend') {
+  if (t.includes('backend')) {
     return `<svg class="category-icon" style="color:#60a5fa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>`
   }
-  if (t === 'frontend') {
+  if (t.includes('frontend')) {
     return `<svg class="category-icon" style="color:#a78bfa" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>`
   }
   if (t === 'design') {
@@ -346,20 +357,17 @@ function handleDownloadGlobalPlan(feature: any) {
 
 function getActionForType(type: string) {
   const t = type.toLowerCase()
-  if (t === 'backend' || t === 'frontend' || t === 'devops' || t === 'testing' || t === 'development') {
-    return { label: 'Implement Code with AI', action: 'implement_code', icon: <Wand2 className="w-3.5 h-3.5" /> }
-  }
-  if (t === 'documentation' || t === 'document') {
+  if (t.includes('doc')) {
     return { label: 'Go to Docs Gen', action: 'navigate', to: '/docs', icon: <FileText className="w-3.5 h-3.5" /> }
   }
-  if (t === 'architecture' || t === 'database architecture design' || t === 'database') {
+  if (t.includes('arch') || (t.includes('database') && t.includes('design'))) {
     return { label: 'Go to Architecture Gen', action: 'navigate', to: '/architecture', icon: <Layers className="w-3.5 h-3.5" /> }
   }
-  if (t === 'requirement analysis' || t === 'requirements' || t === 'analysis' || t === 'design') {
+  if (t.includes('requirement') || t.includes('analysis')) {
     return { label: 'View & Download Report', action: 'view_report', icon: <FileText className="w-3.5 h-3.5" /> }
   }
-  // Default fallback for any other task type
-  return { label: 'View & Download Report', action: 'view_report', icon: <FileText className="w-3.5 h-3.5" /> }
+  // Default fallback for any other task type (mostly coding related like backend, frontend, database, configuration, etc.)
+  return { label: 'Implement Code with AI', action: 'implement_code', icon: <Wand2 className="w-3.5 h-3.5" /> }
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -934,6 +942,9 @@ export function PlannerPage() {
   const [result, setResult]             = useState<PlanResult | null>(null)
   const [implemented, setImplemented]   = useState(false)
   const [implementingType, setImplementingType] = useState<string | null>(null)
+
+  const isPlanImplemented = result?.tasks && result.tasks.length > 0 && result.tasks.every((t: any) => t.status === 'DONE');
+  const effectivelyImplemented = implemented || isPlanImplemented;
   const [reportModalData, setReportModalData] = useState<{ featureName: string; tasks: any[] } | null>(null)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -1080,9 +1091,9 @@ export function PlannerPage() {
     setResult(null)
     setImplemented(false)
 
-    // 30-second hard timeout — if the backend is still hanging after this, abort
+    // 300-second hard timeout — if the backend is still hanging after this, abort
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 30_000)
+    const timeoutId = setTimeout(() => controller.abort(), 300_000)
 
     const showBusySwal = (title: string, html: string, icon: 'warning' | 'error' = 'warning') =>
       Swal.fire({
@@ -1097,20 +1108,18 @@ export function PlannerPage() {
       })
 
     try {
-      const response = await apiClient.post<PlanResult>('/ai/project-plan', {
+      // STEP 1: PRE-CHECK FEATURE
+      const precheckResponse = await apiClient.post<{analysisStatus: string, suggestion: string}>('/ai/precheck-feature', {
         featureDescription: feature,
         projectId: selectedProject.id,
       }, { signal: controller.signal })
 
-      const data = response.data
+      let finalIntent = ''
 
-      // ── Smart Pre-flight Dialog ──────────────────────────────────────────────
-      // If the AI detected the feature is partially done or already exists,
-      // show a friendly dialog before committing the plan.
-      if (data.analysisStatus === 'PARTIAL' || data.analysisStatus === 'EXISTS') {
-        const statusLabel = data.analysisStatus === 'EXISTS' ? '✅ Already Implemented' : '🔧 Partially Implemented'
-        const statusColor = data.analysisStatus === 'EXISTS' ? '#22c55e' : '#f59e0b'
-        const confirmText = data.analysisStatus === 'EXISTS'
+      if (precheckResponse.data.analysisStatus === 'PARTIAL' || precheckResponse.data.analysisStatus === 'EXISTS') {
+        const statusLabel = precheckResponse.data.analysisStatus === 'EXISTS' ? '✅ Already Implemented' : '🔧 Partially Implemented'
+        const statusColor = precheckResponse.data.analysisStatus === 'EXISTS' ? '#22c55e' : '#f59e0b'
+        const confirmText = precheckResponse.data.analysisStatus === 'EXISTS'
           ? 'View Improvement Plan'
           : 'Continue from Here'
 
@@ -1119,7 +1128,7 @@ export function PlannerPage() {
           html: `
             <div style="text-align:left;padding:4px 0">
               <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:14px 16px;margin-bottom:16px">
-                <p style="color:#d4d4d8;font-size:14px;line-height:1.7;margin:0">${data.suggestion || 'The AI analyzed your existing codebase and found relevant code.'}</p>
+                <p style="color:#d4d4d8;font-size:14px;line-height:1.7;margin:0">${precheckResponse.data.suggestion || 'The AI analyzed your existing codebase and found relevant code.'}</p>
               </div>
               <p style="color:#71717a;font-size:13px;margin:0">How would you like to proceed?</p>
             </div>
@@ -1140,16 +1149,28 @@ export function PlannerPage() {
         })
 
         if (preflightResult.isDismissed) {
-          // User cancelled — don't set any result, let them rethink
+          setLoading(false)
           return
         }
 
         if (preflightResult.isDenied) {
-          // Build from scratch — strip analysisStatus so it renders as fresh
-          data.analysisStatus = 'FRESH'
-          data.suggestion = undefined
+          finalIntent = "IGNORE EXISTING CODE. Build entirely from scratch as if it was FRESH."
         }
-        // If confirmed — proceed with the partial/exists plan as-is
+      }
+
+      // STEP 2: GENERATE FULL PLAN
+      const finalDescription = finalIntent ? feature + "\n\nCRITICAL USER INSTRUCTION: " + finalIntent : feature
+
+      const response = await apiClient.post<PlanResult>('/ai/project-plan', {
+        featureDescription: finalDescription,
+        projectId: selectedProject.id,
+      }, { signal: controller.signal })
+
+      const data = response.data
+      
+      if (finalIntent) {
+        data.analysisStatus = 'FRESH'
+        data.suggestion = undefined
       }
 
       setResult(data)
@@ -1157,12 +1178,12 @@ export function PlannerPage() {
       queryClient.invalidateQueries({ queryKey: ['projectPlans', selectedProject?.id] })
 
     } catch (error: any) {
-      // AbortController fired — request took > 30 s
+      // AbortController fired — request took > 300 s
       if (error.name === 'CanceledError' || error.code === 'ERR_CANCELED' || controller.signal.aborted) {
         showBusySwal(
-          '⏱ Request Timed Out',
+          'Request Timed Out',
           `<p style="color:#a1a1aa;font-size:14px;line-height:1.6">
-            The AI took too long to respond (>30 s). Gemini may be under high demand.<br/><br/>
+            The AI took too long to respond (>300 s). Gemini may be under high demand.<br/><br/>
             <strong style="color:#fff">Please wait a few seconds and try again.</strong>
           </p>`
         )
@@ -1481,11 +1502,11 @@ export function PlannerPage() {
                 {/* Implement Plan Button */}
                 <button
                   onClick={() => handleAiImplementType(result.featureId, result.featureName || result.name || '', 'All')}
-                  disabled={implementingType === 'All'}
+                  disabled={implementingType === 'All' || effectivelyImplemented}
                   className="flex items-center gap-2 px-5 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-purple-600/25 active:scale-95 disabled:opacity-50 h-[46px]"
                 >
-                  {implementingType === 'All' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
-                  {implementingType === 'All' ? 'Implementing Plan...' : 'Implement Plan with AI'}
+                  {implementingType === 'All' ? <Loader2 className="w-4 h-4 animate-spin" /> : (effectivelyImplemented ? <CheckCircle2 className="w-4 h-4" /> : <Wand2 className="w-4 h-4" />)}
+                  {implementingType === 'All' ? 'Implementing Plan...' : (effectivelyImplemented ? 'Plan Implemented' : 'Implement Plan with AI')}
                 </button>
               </div>
 
