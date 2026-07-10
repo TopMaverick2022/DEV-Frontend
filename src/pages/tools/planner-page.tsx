@@ -1256,7 +1256,11 @@ export function PlannerPage() {
     
     setImplementingType(type);
     try {
-      await apiClient.post(`/ai/implement-plan/${featureId}`);
+      // When type is 'All', implement every task; otherwise filter by the specific category
+      const url = type === 'All'
+        ? `/ai/implement-plan/${featureId}`
+        : `/ai/implement-plan/${featureId}?taskType=${encodeURIComponent(type)}`
+      await apiClient.post(url);
       
       const res = await Swal.fire({
         title: '✨ AI Implementation Complete!',
