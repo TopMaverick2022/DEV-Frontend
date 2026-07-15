@@ -64,16 +64,16 @@ function parseGitUrl(urlStr: string): { provider: 'github' | 'gitlab'; owner: st
     const url = new URL(cleaned.startsWith('http') ? cleaned : `https://${cleaned}`)
     const hostname = url.hostname
     const pathname = url.pathname.replace(/^\//, '').replace(/\.git$/, '')
-    
+
     const parts = pathname.split('/')
     if (parts.length < 2) return null
-    
+
     const repo = parts[parts.length - 1]
     const owner = parts.slice(0, parts.length - 1).join('/')
-    
+
     const isGitLab = hostname.includes('gitlab')
     const isGitHub = hostname.includes('github')
-    
+
     if (isGitLab) {
       return {
         provider: 'gitlab',
@@ -93,7 +93,7 @@ function parseGitUrl(urlStr: string): { provider: 'github' | 'gitlab'; owner: st
         protocol: url.protocol
       }
     }
-  } catch {}
+  } catch { }
   return null
 }
 
@@ -269,7 +269,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
             projectId: createdProject.id
           }).then(() => {
             queryClient.invalidateQueries({ queryKey: ['commitActivity', createdProject.id] })
-          }).catch(() => {})
+          }).catch(() => { })
         }
       }
 
@@ -338,8 +338,8 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
             <div className="flex gap-2">
               {([
                 { type: 'STANDALONE' as ProjectType, label: 'Standalone', icon: <LayoutDashboard className="w-3.5 h-3.5" />, desc: 'Single embedded project' },
-                { type: 'FRONTEND'   as ProjectType, label: 'Frontend Only', icon: <Monitor className="w-3.5 h-3.5" />,       desc: 'Links to a backend project' },
-                { type: 'BACKEND'    as ProjectType, label: 'Backend Only',  icon: <Server className="w-3.5 h-3.5" />,         desc: 'Links to a frontend project' },
+                { type: 'FRONTEND' as ProjectType, label: 'Frontend Only', icon: <Monitor className="w-3.5 h-3.5" />, desc: 'Links to a backend project' },
+                { type: 'BACKEND' as ProjectType, label: 'Backend Only', icon: <Server className="w-3.5 h-3.5" />, desc: 'Links to a frontend project' },
               ]).map(({ type, label, icon, desc }) => (
                 <button
                   key={type}
@@ -347,12 +347,12 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
                   id={`project-type-${type.toLowerCase()}`}
                   onClick={() => { setProjectType(type); setRelatedProjectId(null) }}
                   className={`flex-1 flex flex-col items-center gap-1 py-2.5 px-2 rounded-xl border text-center transition-all text-[10px] font-semibold
-                    ${ projectType === type
+                    ${projectType === type
                       ? type === 'FRONTEND'
                         ? 'bg-cyan-500/10 border-cyan-500/50 text-cyan-400'
                         : type === 'BACKEND'
-                        ? 'bg-orange-500/10 border-orange-500/50 text-orange-400'
-                        : 'bg-primary/10 border-primary/50 text-primary'
+                          ? 'bg-orange-500/10 border-orange-500/50 text-orange-400'
+                          : 'bg-primary/10 border-primary/50 text-primary'
                       : 'border-border/40 text-muted-foreground hover:border-border hover:text-foreground'
                     }`}
                 >
@@ -419,11 +419,10 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
               />
               {/* Repo fetch status indicator */}
               {repoFetchState !== 'idle' && (
-                <div className={`flex items-center gap-1.5 text-xs mt-1 ${
-                  repoFetchState === 'success' ? 'text-green-500' :
-                  repoFetchState === 'error' ? 'text-destructive' :
-                  'text-muted-foreground'
-                }`}>
+                <div className={`flex items-center gap-1.5 text-xs mt-1 ${repoFetchState === 'success' ? 'text-green-500' :
+                    repoFetchState === 'error' ? 'text-destructive' :
+                      'text-muted-foreground'
+                  }`}>
                   {repoFetchState === 'loading' && <Loader2 className="w-3 h-3 animate-spin" />}
                   {repoFetchState === 'success' && <CheckCircle2 className="w-3 h-3" />}
                   {repoFetchState === 'error' && <AlertCircle className="w-3 h-3" />}
@@ -512,7 +511,7 @@ export function CreateProjectModal({ onClose }: { onClose: () => void }) {
               <h3 className="text-sm font-semibold text-primary flex items-center gap-1.5">
                 <Code2 className="w-4 h-4" /> Tech Stack Configuration
               </h3>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 {/* Language */}
                 <div className="space-y-1">
