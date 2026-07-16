@@ -27,12 +27,14 @@ import apiClient from '@/lib/api-client'
 import { toPng, toJpeg } from 'html-to-image'
 import jsPDF from 'jspdf'
 import { useProject } from '@/features/projects/project-context'
+import { UmlDiagramView } from './UmlDiagramView'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface ServiceDto { name: string; description: string; database?: string }
 interface ApiDto     { method: string; endpoint: string; description: string }
 interface EventDto   { name: string; producer: string; consumer: string }
-interface ArchData   { services: ServiceDto[]; apis: ApiDto[]; events: EventDto[] }
+interface ArchData   { planId?: number; services: ServiceDto[]; apis: ApiDto[]; events: EventDto[] }
+interface ArchitectureHistoryDto { id: number; projectId: number; projectIdea: string; createdAt: string; }
 
 // ── Colour palette ───────────────────────────────────────────────────────────
 const PALETTE = [
@@ -569,8 +571,49 @@ export function ArchitectureGeneratorPage() {
   const [exportOpen,  setExportOpen]  = useState(false)
   const [exporting,   setExporting]   = useState(false)
   const [fullscreen,  setFullscreen]  = useState(false)
+  const [activeTab,   setActiveTab]   = useState<'architecture' | 'uml'>('architecture')
+  const [archHistory, setArchHistory] = useState<ArchitectureHistoryDto[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const canvasRef = useRef<HTMLDivElement>(null)
+
+  // ── Fetch existing ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (selectedProject?.id) {
+      setHistoryLoading(true)
+      apiClient.get(`/ai/architecture/project/${selectedProject.id}/all`)
+        .then(res => {
+          setArchHistory(res.data)
+          if (res.data.length > 0) {
+            loadArchitectureFromHistory(res.data[0].id)
+          }
+        })
+        .catch(err => console.error("Error fetching architecture history", err))
+        .finally(() => setHistoryLoading(false))
+    }
+  }, [selectedProject?.id])
+
+  const loadArchitectureFromHistory = useCallback((id: number) => {
+    apiClient.get(`/ai/architecture/${id}`)
+      .then(res => {
+        if (res.data && res.data.architectureJson) {
+          try {
+            const parsed = JSON.parse(res.data.architectureJson)
+            parsed.planId = res.data.id
+            setArchData(parsed)
+            const { nodes: n, edges: e } = buildNodesAndEdges(parsed)
+            setNodes(n)
+            setEdges(e)
+            setIdea(res.data.projectIdea || '')
+          } catch (err) {
+            console.error("Failed to parse architecture json", err)
+          }
+        }
+      })
+      .catch(err => {
+        if (err.response?.status !== 404) console.error("Error fetching architecture", err)
+      })
+  }, [setNodes, setEdges])
 
   // ── Generate ────────────────────────────────────────────────────────────────
   const handleGenerate = useCallback(async (override?: string) => {
@@ -578,13 +621,18 @@ export function ArchitectureGeneratorPage() {
     if (!q.trim()) return
     setLoading(true); setSelectedSvc(null)
     try {
-      const { data } = await apiClient.post<ArchData>('/ai/generate-architecture', {
+      const { data } = await apiClient.post<ArchData & { planId?: number; projectIdea?: string }>('/ai/generate-architecture', {
         idea: q,
         projectId: selectedProject?.id,
       })
       setArchData(data)
-      const { nodes: n, edges: e } = buildNodesAndEdges(data)
+      const { nodes: n, edges: e } = buildNodesAndEdges(data as ArchData)
       setNodes(n); setEdges(e)
+      
+      // Update history list
+      if (data.planId) {
+        setArchHistory(prev => [{ id: data.planId!, projectId: selectedProject?.id!, projectIdea: q, createdAt: new Date().toISOString() }, ...prev])
+      }
     } catch (e) {
       console.error('Architecture generation failed', e)
     } finally {
@@ -605,7 +653,17 @@ export function ArchitectureGeneratorPage() {
     setSelectedSvc((node.data as any).raw ?? null)
   }, [])
 
-  const handleClear = () => { setArchData(null); setNodes([]); setEdges([]); setIdea(''); setSelectedSvc(null) }
+  const handleClear = async () => { 
+    if (archData?.planId) {
+      try {
+        await apiClient.delete(`/ai/architecture/${archData.planId}`)
+        setArchHistory(prev => prev.filter(h => h.id !== archData.planId))
+      } catch (err) {
+        console.error("Failed to delete architecture", err)
+      }
+    }
+    setArchData(null); setNodes([]); setEdges([]); setIdea(''); setSelectedSvc(null) 
+  }
 
   // ── Export: fitView first so off-screen nodes are included ──────────────────
   const doExport = async (fmt: ExportFormat) => {
@@ -683,7 +741,42 @@ export function ArchitectureGeneratorPage() {
           )}
         </div>
 
-        {/* ── Prompt bar ─────────────────────────────────────────────────────── */}
+        {/* ── Tabs ───────────────────────────────────────────────────────────── */}
+        <div className="flex items-center gap-4 border-b border-border">
+          <button
+            onClick={() => setActiveTab('architecture')}
+            className={`pb-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'architecture' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          >
+            System Architecture
+          </button>
+          <button
+            onClick={() => setActiveTab('uml')}
+            className={`pb-2 text-sm font-medium transition-colors border-b-2 ${activeTab === 'uml' ? 'border-primary text-primary' : 'border-transparent text-muted-foreground hover:text-foreground'}`}
+          >
+            UML Diagrams
+          </button>
+        </div>
+
+        {activeTab === 'architecture' ? (
+          <div className="flex gap-4 h-[700px] border border-border rounded-xl bg-card overflow-hidden">
+            {/* Sidebar for History */}
+            <div className="w-64 border-r border-border bg-muted/20 p-4 flex flex-col gap-4 overflow-y-auto custom-scrollbar shrink-0">
+              <h3 className="font-bold text-sm">Saved Architectures</h3>
+              {historyLoading ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /> : (
+                <div className="space-y-2">
+                  {archHistory.map(h => (
+                    <div key={h.id} className={`flex flex-col p-2 rounded-lg border cursor-pointer transition-colors ${archData?.planId === h.id ? 'bg-primary/10 border-primary/50' : 'bg-background border-border hover:bg-muted/50'}`} onClick={() => loadArchitectureFromHistory(h.id)}>
+                      <div className="text-xs font-bold line-clamp-2">{h.projectIdea || 'No prompt provided'}</div>
+                      <div className="text-[10px] text-muted-foreground mt-1">{new Date(h.createdAt).toLocaleString()}</div>
+                    </div>
+                  ))}
+                  {archHistory.length === 0 && <div className="text-xs text-muted-foreground">No saved architectures.</div>}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 p-4 flex flex-col gap-4 overflow-hidden">
+            {/* ── Prompt bar ─────────────────────────────────────────────────────── */}
         <div className="flex gap-2 shrink-0">
           <textarea
             value={idea}
@@ -979,6 +1072,11 @@ export function ArchitectureGeneratorPage() {
 
             </div>
           </div>
+        )}
+            </div>
+          </div>
+        ) : (
+          <UmlDiagramView />
         )}
 
         {/* click-away for export dropdown */}

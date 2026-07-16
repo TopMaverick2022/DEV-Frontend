@@ -18,7 +18,7 @@ const FRAMEWORKS: Record<string, string[]> = {
   Ruby: ['Ruby on Rails', 'Sinatra'],
   'C#': ['ASP.NET Core', 'Nancy']
 }
-const DATABASES = ['PostgreSQL', 'MySQL', 'MongoDB', 'SQLite', 'Redis', 'Oracle', 'None']
+const DATABASES = ['PostgreSQL', 'MySQL', 'MongoDB', 'MS SQL', 'SQLite', 'Redis', 'Oracle', 'None']
 
 interface CreateProjectPayload {
   name: string
