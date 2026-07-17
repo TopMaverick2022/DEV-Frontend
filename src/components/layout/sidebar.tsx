@@ -15,6 +15,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   FolderKanban,
+  Wrench,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -25,11 +26,12 @@ const groups = [
     label: 'AI Assistants',
     icon: Wand2,
     items: [
-      { icon: Wand2,  label: 'Project Planner',  path: '/planner' },
-      { icon: Layers, label: 'Architecture Generator',  path: '/architecture' },
-      { icon: Code2,  label: 'Code Reviewer',     path: '/reviewer' },
-      { icon: Search, label: 'Code Explainer',    path: '/explainer' },
-      { icon: Bug,    label: 'Debugger',           path: '/debugger' },
+      { icon: Wand2,   label: 'Project Planner',       path: '/planner' },
+      { icon: Layers,  label: 'Architecture Generator', path: '/architecture' },
+      { icon: Code2,   label: 'Code Reviewer',          path: '/reviewer' },
+      { icon: Search,  label: 'Code Explainer',         path: '/explainer' },
+      { icon: Bug,     label: 'Debugger',               path: '/debugger' },
+      { icon: Wrench,  label: 'AI Code Fixer',          path: '/fixer' },
     ],
   },
   {

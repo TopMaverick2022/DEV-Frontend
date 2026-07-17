@@ -16,6 +16,7 @@ import { ExplainerPage } from '@/pages/tools/explainer-page'
 import { SecurityPage } from '@/pages/tools/security-page'
 import { PerformancePage } from '@/pages/tools/performance-page'
 import { DocsPage } from '@/pages/tools/docs-page'
+import { AiFixerPage } from '@/pages/tools/ai-fixer-page'
 import { SecurityIssuesPage } from '@/pages/dashboard/security-issues-page'
 import { CodeBugsPage } from '@/pages/dashboard/code-bugs-page'
 import { HealthScorePage } from '@/pages/dashboard/health-score-page'
@@ -59,6 +60,7 @@ function App() {
               <Route path="/security" element={<AppLayout><SecurityPage /></AppLayout>} />
               <Route path="/performance" element={<AppLayout><PerformancePage /></AppLayout>} />
               <Route path="/docs" element={<AppLayout><DocsPage /></AppLayout>} />
+              <Route path="/fixer" element={<AppLayout><AiFixerPage /></AppLayout>} />
               <Route path="/explorer" element={<AppLayout><ProjectExplorerPage /></AppLayout>} />
 
               {/* Dashboard stat drill-down pages */}

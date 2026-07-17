@@ -441,6 +441,8 @@ export function DashboardPage() {
                 icon={<ShieldCheck className="text-blue-500" />} 
                 color="bg-blue-500/10"
                 onClick={() => selectedProject?.id && navigate(`/dashboard/projects/${selectedProject.id}/security`)}
+                fixButton={!!(projectStats?.totalSecurityIssues && projectStats.totalSecurityIssues > 0)}
+                onFix={() => navigate('/fixer', { state: { category: 'security' } })}
               />
               <StatCard 
                 title="Estimated Effort" 
@@ -457,8 +459,33 @@ export function DashboardPage() {
                 icon={<Zap className="text-purple-500" />} 
                 color="bg-purple-500/10"
                 onClick={() => selectedProject?.id && navigate(`/dashboard/projects/${selectedProject.id}/bugs`)}
+                fixButton={!!(projectStats?.totalBugs && projectStats.totalBugs > 0)}
+                onFix={() => navigate('/fixer', { state: { category: 'bug' } })}
               />
             </div>
+
+            {/* AI Fixer CTA Banner */}
+            {(projectStats?.totalSecurityIssues || projectStats?.totalBugs || projectStats?.totalPerformanceIssues) ? (
+              <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-2xl bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-violet-500/5 border border-violet-500/25">
+                <div className="p-2.5 rounded-xl bg-violet-500/20 shrink-0">
+                  <Wand2 className="w-5 h-5 text-violet-400" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-sm font-bold text-violet-300">AI Code Fixer Available</h4>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {(projectStats?.totalSecurityIssues ?? 0) + (projectStats?.totalBugs ?? 0) + (projectStats?.totalPerformanceIssues ?? 0)} issues detected. Let AI automatically fix security vulnerabilities, bugs, and performance problems.
+                  </p>
+                </div>
+                <button
+                  id="dashboard-fix-issues-btn"
+                  onClick={() => navigate('/fixer')}
+                  className="shrink-0 flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold text-sm transition shadow-lg shadow-violet-500/20"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Fix Issues →
+                </button>
+              </div>
+            ) : null}
 
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -687,10 +714,10 @@ export function DashboardPage() {
   )
 }
 
-function StatCard({ title, value, trend, icon, color, onClick }: any) {
+function StatCard({ title, value, trend, icon, color, onClick, fixButton, onFix }: any) {
   return (
     <GlassCard
-      className={cn('flex flex-col gap-4', onClick && 'cursor-pointer hover:scale-[1.02] hover:shadow-xl transition-transform')} 
+      className={cn('flex flex-col gap-4 relative overflow-hidden', onClick && 'cursor-pointer hover:scale-[1.02] hover:shadow-xl transition-transform')} 
       onClick={onClick}
     >
       <div className="flex items-center justify-between">
@@ -708,6 +735,15 @@ function StatCard({ title, value, trend, icon, color, onClick }: any) {
         <p className="text-3xl font-bold">{value}</p>
         <p className="text-xs text-muted-foreground mt-1">{trend}</p>
       </div>
+      {fixButton && onFix && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onFix(); }}
+          className="mt-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600/80 to-fuchsia-600/80 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold text-xs transition w-fit"
+        >
+          <Sparkles className="w-3 h-3" />
+          Fix with AI
+        </button>
+      )}
     </GlassCard>
   )
 }
