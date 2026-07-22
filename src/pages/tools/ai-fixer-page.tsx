@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { GlassCard } from '@/components/shared/glass-components'
 import { useProject } from '@/features/projects/project-context'
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/lib/api-client'
 import {
   Wrench,
@@ -24,6 +25,7 @@ import {
   ArrowLeft,
   Eye,
   Layers,
+  Star,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -55,24 +57,28 @@ const ISSUE_COLORS: Record<string, string> = {
   security:    'text-red-400 bg-red-500/10 border-red-500/30',
   bug:         'text-yellow-400 bg-yellow-500/10 border-yellow-500/30',
   performance: 'text-orange-400 bg-orange-500/10 border-orange-500/30',
+  codequality: 'text-blue-400 bg-blue-500/10 border-blue-500/30',
 }
 
 const ISSUE_ICONS: Record<string, React.ReactNode> = {
   security:    <ShieldAlert className="w-3.5 h-3.5" />,
   bug:         <Bug className="w-3.5 h-3.5" />,
   performance: <Zap className="w-3.5 h-3.5" />,
+  codequality: <Star className="w-3.5 h-3.5" />,
 }
 
 function getIssueStyle(type: string) {
   const key = type.toLowerCase()
   if (key.startsWith('sec')) return ISSUE_COLORS.security
   if (key.startsWith('per')) return ISSUE_COLORS.performance
+  if (key === 'codequality' || key === 'code quality' || key === 'code_quality' || key === 'quality') return ISSUE_COLORS.codequality
   return ISSUE_COLORS.bug
 }
 function getIssueIcon(type: string) {
   const key = type.toLowerCase()
   if (key.startsWith('sec')) return ISSUE_ICONS.security
   if (key.startsWith('per')) return ISSUE_ICONS.performance
+  if (key === 'codequality' || key === 'code quality' || key === 'code_quality' || key === 'quality') return ISSUE_ICONS.codequality
   return ISSUE_ICONS.bug
 }
 
@@ -80,6 +86,7 @@ export function AiFixerPage() {
   const { selectedProject } = useProject()
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
 
   const [files, setFiles] = useState<FileIssue[]>([])
   const [loading, setLoading] = useState(false)
@@ -88,7 +95,11 @@ export function AiFixerPage() {
   const [fixStates, setFixStates] = useState<Record<string, FileFixState>>({})
   const [viewMode, setViewMode] = useState<'diff' | 'fixed'>('diff')
   const [fixingAll, setFixingAll] = useState(false)
-  const [activeTab, setActiveTab] = useState<'all' | 'security' | 'bug' | 'performance'>('all')
+  const [isBatchMode, setIsBatchMode] = useState(false)
+  const [activeTab, setActiveTab] = useState<'all' | 'security' | 'bug' | 'performance' | 'quality'>('all')
+
+  const cancelRef = React.useRef(false)
+  const abortControllerRef = React.useRef<AbortController | null>(null)
 
   // Pre-select category from dashboard navigation
   useEffect(() => {
@@ -126,6 +137,9 @@ export function AiFixerPage() {
     setFixStates(prev => ({ ...prev, [file.path]: { status: 'fixing' } }))
     setSelectedFile(file)
 
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     try {
       const { data } = await apiClient.post<{
         filePath: string
@@ -133,7 +147,7 @@ export function AiFixerPage() {
         fixedCode: string
         summary: string
         issueCount: number
-      }>(`/fixer/${projectId}/fix-file`, { filePath: file.path })
+      }>(`/fixer/${projectId}/fix-file`, { filePath: file.path }, { signal: controller.signal })
 
       setFixStates(prev => ({
         ...prev,
@@ -144,7 +158,20 @@ export function AiFixerPage() {
           summary: data.summary,
         },
       }))
+      // Invalidate dashboard stats so Security Issues / Bugs / Health Score update immediately
+      if (selectedProject?.id) {
+        queryClient.invalidateQueries({ queryKey: ['projectStats', selectedProject.id] })
+      }
     } catch (err: any) {
+      if (err.name === 'CanceledError' || err.message === 'canceled') {
+        // Handle abort gracefully
+        setFixStates(prev => {
+          const next = { ...prev }
+          delete next[file.path] // Revert status
+          return next
+        })
+        return
+      }
       setFixStates(prev => ({
         ...prev,
         [file.path]: {
@@ -158,23 +185,56 @@ export function AiFixerPage() {
   const fixAll = async () => {
     if (!selectedProject?.id || filteredFiles.length === 0) return
     setFixingAll(true)
+    setIsBatchMode(true)
+    cancelRef.current = false
+
     for (const file of filteredFiles) {
+      if (cancelRef.current) break
       if (fixStates[file.path]?.status === 'fixed') continue
       await fixFile(file)
     }
     setFixingAll(false)
   }
 
+  const cancelFixAll = () => {
+    cancelRef.current = true
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    setFixingAll(false)
+  }
+
+  const handleFixSingle = (file: FileIssue) => {
+    setIsBatchMode(false)
+    fixFile(file)
+  }
+
+  const isCodeQuality = (t: string) => {
+    const k = t.toLowerCase()
+    return k === 'codequality' || k === 'code quality' || k === 'code_quality' || k === 'quality'
+  }
+
   const filteredFiles = files.filter(f => {
     if (activeTab === 'all') return true
+    if (activeTab === 'quality') return f.issues.some(i => isCodeQuality(i.type))
     return f.issues.some(i => i.type.toLowerCase().startsWith(activeTab.substring(0, 3)))
   })
 
-  const totalIssues   = files.reduce((s, f) => s + f.issues.length, 0)
-  const totalFixed    = Object.values(fixStates).filter(s => s.status === 'fixed').length
-  const totalSecurity = files.reduce((s, f) => s + f.issues.filter(i => i.type.toLowerCase().startsWith('sec')).length, 0)
-  const totalBugs     = files.reduce((s, f) => s + f.issues.filter(i => i.type.toLowerCase().startsWith('bug') || i.type.toLowerCase() === 'bug').length, 0)
-  const totalPerf     = files.reduce((s, f) => s + f.issues.filter(i => i.type.toLowerCase().startsWith('per')).length, 0)
+  const totalIssues       = files.reduce((s, f) => s + f.issues.length, 0)
+  const totalFixed        = Object.values(fixStates).filter(s => s.status === 'fixed').length
+  const totalSecurity     = files.reduce((s, f) => s + f.issues.filter(i => i.type.toLowerCase().startsWith('sec')).length, 0)
+  const totalBugs         = files.reduce((s, f) => s + f.issues.filter(i => i.type.toLowerCase().startsWith('bug')).length, 0)
+  const totalPerf         = files.reduce((s, f) => s + f.issues.filter(i => i.type.toLowerCase().startsWith('per')).length, 0)
+  const totalCodeQuality  = files.reduce((s, f) => s + f.issues.filter(i => isCodeQuality(i.type)).length, 0)
+
+  // Remaining issues (only from unfixed files) — shown in stats bar so numbers go down as files are fixed
+  const unfixedFiles         = files.filter(f => fixStates[f.path]?.status !== 'fixed')
+  const remainingIssues      = unfixedFiles.reduce((s, f) => s + f.issues.length, 0)
+  const remainingSecurity    = unfixedFiles.reduce((s, f) => s + f.issues.filter(i => i.type.toLowerCase().startsWith('sec')).length, 0)
+  const remainingBugs        = unfixedFiles.reduce((s, f) => s + f.issues.filter(i => i.type.toLowerCase().startsWith('bug')).length, 0)
+  const remainingPerf        = unfixedFiles.reduce((s, f) => s + f.issues.filter(i => i.type.toLowerCase().startsWith('per')).length, 0)
+  const remainingCodeQuality = unfixedFiles.reduce((s, f) => s + f.issues.filter(i => isCodeQuality(i.type)).length, 0)
+
 
   const selectedState = selectedFile ? fixStates[selectedFile.path] : null
 
@@ -220,22 +280,35 @@ export function AiFixerPage() {
       </div>
 
       {/* ── Stats Bar ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
-          { label: 'Total Issues',    value: totalIssues,   color: 'text-foreground',    bg: 'bg-muted/30' },
-          { label: 'Security',        value: totalSecurity, color: 'text-red-400',       bg: 'bg-red-500/10' },
-          { label: 'Bugs',            value: totalBugs,     color: 'text-yellow-400',    bg: 'bg-yellow-500/10' },
-          { label: 'Performance',     value: totalPerf,     color: 'text-orange-400',    bg: 'bg-orange-500/10' },
+          { label: 'Total Issues',  value: remainingIssues,      total: totalIssues,      color: remainingIssues === 0 ? 'text-green-400' : 'text-foreground',       bg: remainingIssues === 0 ? 'bg-green-500/10' : 'bg-muted/30' },
+          { label: 'Security',      value: remainingSecurity,    total: totalSecurity,    color: remainingSecurity === 0 ? 'text-green-400' : 'text-red-400',     bg: remainingSecurity === 0 ? 'bg-green-500/10' : 'bg-red-500/10' },
+          { label: 'Bugs',          value: remainingBugs,        total: totalBugs,        color: remainingBugs === 0 ? 'text-green-400' : 'text-yellow-400',      bg: remainingBugs === 0 ? 'bg-green-500/10' : 'bg-yellow-500/10' },
+          { label: 'Performance',   value: remainingPerf,        total: totalPerf,        color: remainingPerf === 0 ? 'text-green-400' : 'text-orange-400',      bg: remainingPerf === 0 ? 'bg-green-500/10' : 'bg-orange-500/10' },
+          { label: 'Code Quality',  value: remainingCodeQuality, total: totalCodeQuality, color: remainingCodeQuality === 0 ? 'text-green-400' : 'text-blue-400',  bg: remainingCodeQuality === 0 ? 'bg-green-500/10' : 'bg-blue-500/10' },
         ].map(s => (
-          <GlassCard key={s.label} className={cn('flex items-center gap-3 py-3 px-4', s.bg)}>
-            <p className={cn('text-2xl font-bold', s.color)}>{s.value}</p>
-            <p className="text-xs text-muted-foreground">{s.label}</p>
+          <GlassCard key={s.label} className={cn('flex items-center gap-3 py-3 px-4 transition-colors duration-500', s.bg)}>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <p className={cn('text-2xl font-bold transition-colors duration-500', s.color)}>{s.value}</p>
+                {s.value === 0 && s.total > 0 && (
+                  <CheckCircle2 className="w-5 h-5 text-green-400 animate-in zoom-in duration-300" />
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">{s.label}</p>
+              {s.total > 0 && s.value < s.total && (
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                  {s.total - s.value} of {s.total} fixed
+                </p>
+              )}
+            </div>
           </GlassCard>
         ))}
       </div>
 
       {/* ── Fixed Progress ── */}
-      {totalFixed > 0 && (
+      {(totalFixed > 0 || fixingAll || Object.values(fixStates).some(s => s.status === 'fixing')) && (
         <motion.div
           initial={{ opacity: 0, y: -8 }}
           animate={{ opacity: 1, y: 0 }}
@@ -252,6 +325,14 @@ export function AiFixerPage() {
             />
           </div>
           <span className="text-xs text-green-400 font-bold">{Math.round((totalFixed / files.length) * 100)}%</span>
+          {fixingAll && (
+            <button
+              onClick={cancelFixAll}
+              className="ml-2 flex items-center gap-1.5 px-3 py-1 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400 text-xs font-bold transition"
+            >
+              <XCircle className="w-3.5 h-3.5" /> Stop
+            </button>
+          )}
         </motion.div>
       )}
 
@@ -262,7 +343,7 @@ export function AiFixerPage() {
         <GlassCard className="flex flex-col p-0 overflow-hidden">
           {/* Category Tabs */}
           <div className="flex border-b border-border/50 shrink-0">
-            {(['all', 'security', 'bug', 'performance'] as const).map(tab => (
+              {(['all', 'security', 'bug', 'performance', 'quality'] as const).map(tab => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -273,10 +354,11 @@ export function AiFixerPage() {
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                {tab === 'all' ? `All (${totalIssues})` :
-                 tab === 'security' ? `Security (${totalSecurity})` :
-                 tab === 'bug' ? `Bugs (${totalBugs})` :
-                 `Perf (${totalPerf})`}
+                {tab === 'all' ? `All (${remainingIssues})` :
+                 tab === 'security' ? `Security (${remainingSecurity})` :
+                 tab === 'bug' ? `Bugs (${remainingBugs})` :
+                 tab === 'quality' ? `Quality (${remainingCodeQuality})` :
+                 `Perf (${remainingPerf})`}
               </button>
             ))}
           </div>
@@ -355,7 +437,7 @@ export function AiFixerPage() {
                           {state?.status !== 'fixing' && state?.status !== 'fixed' && (
                             <button
                               id={`fix-btn-${file.fileId}`}
-                              onClick={() => fixFile(file)}
+                              onClick={() => handleFixSingle(file)}
                               className="ml-1 shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[10px] font-bold transition"
                             >
                               <Play className="w-2.5 h-2.5" /> Fix
@@ -425,14 +507,24 @@ export function AiFixerPage() {
                 Choose any file from the left panel and click <strong>Fix</strong> to let the AI automatically resolve all detected issues.
               </p>
               {filteredFiles.length > 0 && (
-                <button
-                  onClick={fixAll}
-                  disabled={fixingAll}
-                  className="mt-2 flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold text-sm transition shadow-lg shadow-violet-500/20"
-                >
-                  {fixingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  Fix All Issues Automatically
-                </button>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={fixAll}
+                    disabled={fixingAll}
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold text-sm transition shadow-lg shadow-violet-500/20"
+                  >
+                    {fixingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    {fixingAll ? 'Fixing...' : 'Fix All Issues Automatically'}
+                  </button>
+                  {fixingAll && (
+                    <button
+                      onClick={cancelFixAll}
+                      className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 font-bold text-sm transition"
+                    >
+                      <XCircle className="w-4 h-4" /> Cancel
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           ) : (
@@ -525,7 +617,7 @@ export function AiFixerPage() {
                       </div>
                     ))}
                     <button
-                      onClick={() => fixFile(selectedFile)}
+                      onClick={() => handleFixSingle(selectedFile)}
                       className="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold text-sm transition"
                     >
                       <Sparkles className="w-4 h-4" />

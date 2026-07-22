@@ -465,7 +465,7 @@ export function DashboardPage() {
             </div>
 
             {/* AI Fixer CTA Banner */}
-            {(projectStats?.totalSecurityIssues || projectStats?.totalBugs || projectStats?.totalPerformanceIssues) ? (
+            {(projectStats?.totalSecurityIssues || projectStats?.totalBugs || projectStats?.totalPerformanceIssues || projectStats?.totalCodeQualityIssues) ? (
               <div className="mb-6 flex items-center gap-4 px-5 py-4 rounded-2xl bg-gradient-to-r from-violet-500/10 via-fuchsia-500/10 to-violet-500/5 border border-violet-500/25">
                 <div className="p-2.5 rounded-xl bg-violet-500/20 shrink-0">
                   <Wand2 className="w-5 h-5 text-violet-400" />
@@ -473,7 +473,7 @@ export function DashboardPage() {
                 <div className="flex-1 min-w-0">
                   <h4 className="text-sm font-bold text-violet-300">AI Code Fixer Available</h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {(projectStats?.totalSecurityIssues ?? 0) + (projectStats?.totalBugs ?? 0) + (projectStats?.totalPerformanceIssues ?? 0)} issues detected. Let AI automatically fix security vulnerabilities, bugs, and performance problems.
+                    {(projectStats?.totalSecurityIssues ?? 0) + (projectStats?.totalBugs ?? 0) + (projectStats?.totalPerformanceIssues ?? 0) + (projectStats?.totalCodeQualityIssues ?? 0)} issues detected. Let AI automatically fix security vulnerabilities, bugs, code quality, and performance problems.
                   </p>
                 </div>
                 <button
@@ -1944,7 +1944,8 @@ function ProjectHealthChart({ projectStats, inPane = false }: { projectStats: an
   const chartData = [
     { name: 'Security', value: projectStats?.totalSecurityIssues || 0, color: '#ef4444' },
     { name: 'Bugs', value: projectStats?.totalBugs || 0, color: '#eab308' },
-    { name: 'Performance', value: projectStats?.totalPerformanceIssues || 0, color: '#f97316' }
+    { name: 'Performance', value: projectStats?.totalPerformanceIssues || 0, color: '#f97316' },
+    { name: 'Code Quality', value: projectStats?.totalCodeQualityIssues || 0, color: '#3b82f6' }
   ]
 
   const content = (
@@ -1956,7 +1957,7 @@ function ProjectHealthChart({ projectStats, inPane = false }: { projectStats: an
         </p>
       </div>
       <div style={{ width: '100%', height: '300px' }} className="mt-4">
-        {(projectStats?.totalSecurityIssues || projectStats?.totalBugs || projectStats?.totalPerformanceIssues) ? (
+        {(projectStats?.totalSecurityIssues || projectStats?.totalBugs || projectStats?.totalPerformanceIssues || projectStats?.totalCodeQualityIssues) ? (
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 15 }}>
               <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(255,255,255,0.05)" />
