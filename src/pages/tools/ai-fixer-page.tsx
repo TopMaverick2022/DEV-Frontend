@@ -273,7 +273,7 @@ export function AiFixerPage() {
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold text-sm transition shadow-lg shadow-violet-500/20"
             >
               {fixingAll ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-              Fix All ({filteredFiles.filter(f => fixStates[f.path]?.status !== 'fixed').length} remaining)
+              Fix All ({filteredFiles.filter(f => fixStates[f.path]?.status !== 'fixed').length} files remaining)
             </button>
           )}
         </div>
@@ -316,15 +316,15 @@ export function AiFixerPage() {
         >
           <CheckCheck className="w-4 h-4 text-green-400 shrink-0" />
           <span className="text-sm text-green-300 font-medium">
-            {totalFixed} of {files.length} file{files.length !== 1 ? 's' : ''} fixed
+            {filteredFiles.filter(f => fixStates[f.path]?.status === 'fixed').length} of {filteredFiles.length} file{filteredFiles.length !== 1 ? 's' : ''} fixed
           </span>
           <div className="flex-1 h-1.5 rounded-full bg-green-900/30 overflow-hidden">
             <div
               className="h-full rounded-full bg-gradient-to-r from-green-500 to-emerald-400 transition-all duration-700"
-              style={{ width: `${Math.round((totalFixed / files.length) * 100)}%` }}
+              style={{ width: `${Math.round((filteredFiles.filter(f => fixStates[f.path]?.status === 'fixed').length / Math.max(1, filteredFiles.length)) * 100)}%` }}
             />
           </div>
-          <span className="text-xs text-green-400 font-bold">{Math.round((totalFixed / files.length) * 100)}%</span>
+          <span className="text-xs text-green-400 font-bold">{Math.round((filteredFiles.filter(f => fixStates[f.path]?.status === 'fixed').length / Math.max(1, filteredFiles.length)) * 100)}%</span>
           {fixingAll && (
             <button
               onClick={cancelFixAll}
@@ -386,6 +386,9 @@ export function AiFixerPage() {
                   const state = fixStates[file.path]
                   const isExpanded = expandedFile === file.path
                   const isSelected = selectedFile?.path === file.path
+                  const tabIssues = activeTab === 'all' 
+                    ? file.issues 
+                    : file.issues.filter(i => activeTab === 'quality' ? isCodeQuality(i.type) : i.type.toLowerCase().startsWith(activeTab.substring(0, 3)))
 
                   return (
                     <motion.div key={file.path} layout>
@@ -429,7 +432,7 @@ export function AiFixerPage() {
                           )}
                           {!state && (
                             <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">
-                              {file.issues.length} issue{file.issues.length !== 1 ? 's' : ''}
+                              {tabIssues.length} issue{tabIssues.length !== 1 ? 's' : ''}
                             </span>
                           )}
 
@@ -464,7 +467,7 @@ export function AiFixerPage() {
                               className="overflow-hidden"
                             >
                               <div className="border-t border-border/30 divide-y divide-border/20 max-h-48 overflow-y-auto">
-                                {file.issues.map((issue, idx) => (
+                                {tabIssues.map((issue, idx) => (
                                   <div key={idx} className="flex items-start gap-2 px-4 py-2.5 hover:bg-white/5 transition-colors">
                                     <span className={cn('mt-0.5 shrink-0', getIssueStyle(issue.type).split(' ')[0])}>
                                       {getIssueIcon(issue.type)}
